@@ -22,7 +22,7 @@ chroma_db = Chroma(
             embedding_function=embedding_function
         )
 
-query = "give 3 products of brand hp "
+query = "give 3 products of brand hp noir "
 
 answer = chroma_db.similarity_search(query)
 

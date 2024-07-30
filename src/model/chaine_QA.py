@@ -1,8 +1,8 @@
-from langchain_community.llms import HuggingFaceHub
 from dotenv import load_dotenv
-import os
 from langchain.chains import RetrievalQA
-from langchain_core.prompts import PromptTemplate
+import os
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.messages import HumanMessage
 from langchain_huggingface import HuggingFaceEndpoint
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
@@ -10,10 +10,6 @@ from langchain.docstore.document import Document
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-from langchain.chains.query_constructor.base import (
-    StructuredQueryOutputParser,
-    get_query_constructor_prompt,
-)
 from langchain.retrievers.self_query.chroma import ChromaTranslator
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -33,101 +29,29 @@ document_content_description = "Information about the product, including part nu
 # Métadonnées des attributs
 metadata_field_info = [
     AttributeInfo(
-        name="part",
-        description="The part number of the product.",
-        type="string",
-    ),
-    AttributeInfo(
-        name="quantity",
-        description="The quantity available of the product.",
-        type="integer",
-    ),
-    AttributeInfo(
-        name="description",
-        description="The description of the product.",
-        type="string",
-    ),
-    AttributeInfo(
-        name="fournisseur",
-        description="The supplier of the product.",
-        type="string",
-    ),
-    AttributeInfo(
-        name="prix", 
-        description="The price of the product.",
-        type="float",
-    ),
-    AttributeInfo(
         name="marque",
         description="The brand of the product.",
         type="string",
     ),
-]
-
- # Define allowed comparators list
-allowed_comparators = [
-    "$eq",  # Equal to (number, string, boolean)
-    "$ne",  # Not equal to (number, string, boolean)
-    "$gt",  # Greater than (number)
-    "$gte",  # Greater than or equal to (number)
-    "$lt",  # Less than (number)
-    "$lte",  # Less than or equal to (number)
-]
-
-examples = [
-    (
-        "Recommend some products of brand hp i7 8go de ram.",
-        {
-            "query": "products i7 8go de ram",
-            "filter": 'and(eq("brand", "hp") ,in("description", "i7 8go de ram"))',
-        },
+    AttributeInfo(
+        name="categorie",
+        description="The category of the product.",
+        type="string",
     ),
-    (
-        "Show me products with at least 16GB of RAM.",
-        {
-            "query": "products 16GB RAM",
-            "filter": 'gte("description", "16GB RAM")',
-        },
+    AttributeInfo(
+        name="source",
+        description="The source of the product.",
+        type="string",
     ),
-    (
-        "Find me the latest model of Dell laptops with a price below 1000 euros.",
-        {
-            "query": "latest Dell laptops below 1000 euros",
-            "filter": 'and(and(eq("brand", "Dell") , lte("prix", 1000)) , eq("description", "laptop"))',
-        },
+    AttributeInfo(
+        name="row",
+        description="The row of the product.",
+        type="integer",
     ),
-    (
-        "List all available products from Asus with at least 500 units in stock.",
-        {
-            "query": "Asus products with stock",
-            "filter": 'and(eq("brand", "Asus") , gte("quantity", 500))',
-        },
-    ),
-    (
-        "Show me all Samsung monitors priced between 150 and 300 euros.",
-        {
-            "query": "Samsung monitors priced between 150 and 300 euros",
-            "filter": 'and(and(and(eq("brand", "Samsung") , gte("prix", 150)) , lte("prix", 300)) , eq("description", "monitor"))',
-        },
-    ),
-    (
-        "Recommend high-performance laptops with at least 32GB of RAM and a price above 2000 euros.",
-        {
-            "query": "high-performance laptops with 32GB RAM above 2000 euros",
-            "filter": 'and(gte("description", "32GB RAM") , gte("prix", 2000))',
-        },
-    ),
-    (
-        "Find products from Lenovo with a description mentioning 'SSD' and a quantity less than 50.",
-        {
-            "query": "Lenovo products with SSD",
-            "filter": 'and(and(eq("brand", "Lenovo") , eq("description", "SSD")) , lte("quantity", 50))',
-        },
-    )
 ]
 
 GROQ_TOKEN='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'
-llm = ChatGroq(model_name='llama3-8b-8192', api_key= GROQ_TOKEN,temperature=0)
+llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key= GROQ_TOKEN,temperature=0)
 
 def load_embedding_function():
     try:
@@ -152,18 +76,6 @@ vectorstore = Chroma(persist_directory=CHROMA_PATH,
                      embedding_function=embedding_function, 
                      collection_name=COLLECTION_CSV)
 
-# Créer le prompt pour le constructeur de requêtes
-prompt = get_query_constructor_prompt(
-            document_content_description,
-            metadata_field_info,
-            allowed_comparators=allowed_comparators,
-            examples=examples,
-        )
-
-
-output_parser = StructuredQueryOutputParser.from_components()
-query_constructor = prompt | llm | output_parser
-
 # Initialiser le SelfQueryRetriever
 retriever = SelfQueryRetriever.from_llm(
     llm,
@@ -171,11 +83,13 @@ retriever = SelfQueryRetriever.from_llm(
     document_content_description,
     metadata_field_info,
     verbose=True,
-    enable_limit=True
-   
 )
+# This example only specifies a relevant query
+retrieved_docs = retriever.invoke("donne moi un imprimante marque hp ")
+print(retrieved_docs)
+print(len(retrieved_docs))
 
-
+'''
 # Construire le template de prompt
 prompt = ChatPromptTemplate.from_messages(
     [
@@ -199,35 +113,17 @@ prompt = ChatPromptTemplate.from_messages(
         ),
     ]
 )
-# Fonction pour formater les documents
-def format_docs(docs):
-    """Formate chaque document avec un affichage lisible"""
-    return "\n\n".join(
-        f"{doc.page_content}\n\nMetadata: {doc.metadata}"
-        for doc in docs
-    )
 
-# Création de la chaîne de traitement
-rag_chain_from_docs = (
-    RunnablePassthrough.assign(context=lambda x: format_docs(x["context"]))
-    | prompt
-    | llm
-    | StrOutputParser()
+document_chain = create_stuff_documents_chain(llm, prompt)
+result = document_chain.invoke(
+    {
+        "context": docs,
+        "messages": [
+            HumanMessage(content=query)
+        ],
+    }
 )
 
-# Chaîne parallèle pour documents et question
-rag_chain_with_source = (
-    RunnableParallel(
-        {"context": retriever, "question": RunnablePassthrough()}
-    ).assign(answer=rag_chain_from_docs)
-)
-
-# Requête de l'utilisateur
-query = "donne moi 2 produits de marque samsung "
-
-# Exécution de la requête
-result = rag_chain_with_source.invoke(query)
-
-# Afficher la réponse générée
 print(result)
 
+'''

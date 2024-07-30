@@ -139,15 +139,9 @@ docs = [
     )
 ]
 
-text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=300,
-            chunk_overlap=100,
-            length_function=len,
-            add_start_index=True,
-        )
-chunks = text_splitter.split_documents(docs)
-chroma_instance = Chroma(embedding_function= embedding_function, persist_directory=CHROMA_PATH, collection_name=COLLECTION_CSV)
-# chroma_instance.delete(chroma_instance.get()['ids'])
-chroma_instance.add_documents(chunks)
-chroma_instance.persist()
-print("There are", chroma_instance._collection.count(), "documents in the collection")
+def insert_chroma(docs):
+    chroma_instance = Chroma(embedding_function= embedding_function, persist_directory=CHROMA_PATH, collection_name=COLLECTION_CSV)
+    # chroma_instance.delete(chroma_instance.get()['ids'])
+    chroma_instance.add_documents(docs)
+    chroma_instance.persist()
+    print("There are", chroma_instance._collection.count(), "documents in the collection")
