@@ -1,36 +1,114 @@
-import os
-import traceback
+from langchain_community.llms import HuggingFaceHub
 from dotenv import load_dotenv
-from langchain_community.vectorstores import Chroma
-from langchain.retrievers.self_query.base import SelfQueryRetriever
-from langchain_core.prompts import PromptTemplate
+import os
 from langchain.chains import RetrievalQA
-from langchain_community.llms import OpenAI
-from langchain.schema import Document
-from langchain_core.retrievers import BaseRetriever
+from langchain_core.prompts import PromptTemplate
+from langchain_huggingface import HuggingFaceEndpoint
+from langchain_community.vectorstores import Chroma
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.docstore.document import Document
+from langchain.chains.query_constructor.base import AttributeInfo
+from langchain.retrievers.self_query.base import SelfQueryRetriever
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
+from langchain.chains.query_constructor.base import (
+    StructuredQueryOutputParser,
+    get_query_constructor_prompt,
+)
+from langchain.retrievers.self_query.chroma import ChromaTranslator
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+
+from langchain_groq import ChatGroq
+
 
 # Charger les variables d'environnement
 load_dotenv()
 
+# Récupérer la clé API Hugging Face
 HF_TOKEN = os.getenv('API_TOKEN')
-CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
-COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 
-# Fonction pour charger le modèle BLOOM via l'API Hugging Face
-def load_model():
-    try:
-        model_name = "bigscience/bloom"
-        # Configuration du modèle Hugging Face BLOOM via API
-        llm = OpenAI(model=model_name, api_key=HF_TOKEN, temperature=0.5)
-        print(f"Model {model_name} loaded successfully via API.")
-        return llm
-    except Exception as e:
-        print("Error loading the model:", e)
-        print(traceback.format_exc())
-        return None
+# Description du contenu du document
+document_content_description = "Information about the product, including part number, supplier, description, brand, quantity, and price. Do not use the word 'contains' or 'contain' as filters. "
 
-# Charger l'embedding model de Hugging Face
+# Métadonnées des attributs
+metadata_field_info = [
+    AttributeInfo(
+        name="categorie",
+        description="The category of the product.",
+        type="string",
+    ),
+    AttributeInfo(
+        name="marque",
+        description="The brand of the product.",
+        type="string",
+    ),
+]
+
+ # Define allowed comparators list
+allowed_comparators = [
+    "$eq",  # Equal to (number, string, boolean)
+    "$ne",  # Not equal to (number, string, boolean)
+    "$gt",  # Greater than (number)
+    "$gte",  # Greater than or equal to (number)
+    "$lt",  # Less than (number)
+    "$lte",  # Less than or equal to (number)
+]
+
+examples = [
+    (
+        "Recommend some products of brand hp i7 8go de ram.",
+        {
+            "query": "products i7 8go de ram",
+            "filter": 'and(eq("brand", "hp") ,in("description", "i7 8go de ram"))',
+        },
+    ),
+    (
+        "Show me products with at least 16GB of RAM.",
+        {
+            "query": "products 16GB RAM",
+            "filter": 'gte("description", "16GB RAM")',
+        },
+    ),
+    (
+        "Find me the latest model of Dell laptops with a price below 1000 euros.",
+        {
+            "query": "latest Dell laptops below 1000 euros",
+            "filter": 'and(and(eq("brand", "Dell") , lte("prix", 1000)) , eq("description", "laptop"))',
+        },
+    ),
+    (
+        "List all available products from Asus with at least 500 units in stock.",
+        {
+            "query": "Asus products with stock",
+            "filter": 'and(eq("brand", "Asus") , gte("quantity", 500))',
+        },
+    ),
+    (
+        "Show me all Samsung monitors priced between 150 and 300 euros.",
+        {
+            "query": "Samsung monitors priced between 150 and 300 euros",
+            "filter": 'and(and(and(eq("brand", "Samsung") , gte("prix", 150)) , lte("prix", 300)) , eq("description", "monitor"))',
+        },
+    ),
+    (
+        "Recommend high-performance laptops with at least 32GB of RAM and a price above 2000 euros.",
+        {
+            "query": "high-performance laptops with 32GB RAM above 2000 euros",
+            "filter": 'and(gte("description", "32GB RAM") , gte("prix", 2000))',
+        },
+    ),
+    (
+        "Find products from Lenovo with a description mentioning 'SSD' and a quantity less than 50.",
+        {
+            "query": "Lenovo products with SSD",
+            "filter": 'and(and(eq("brand", "Lenovo") , eq("description", "SSD")) , lte("quantity", 50))',
+        },
+    )
+]
+
+GROQ_TOKEN='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'
+llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key= GROQ_TOKEN,temperature=0)
+
 def load_embedding_function():
     try:
         embedding_function = HuggingFaceInferenceAPIEmbeddings(
@@ -41,98 +119,93 @@ def load_embedding_function():
         return embedding_function
     except Exception as e:
         print("Error loading embedding function:", e)
-        print(traceback.format_exc())
         return None
 
-# Initialiser la base de données vectorielle Chroma
-def initialize_chroma(embedding_function):
-    try:
-        chroma_db = Chroma(
-            persist_directory=CHROMA_PATH,
-            collection_name=COLLECTION_CSV,
-            embedding_function=embedding_function
+embedding_function = load_embedding_function()
+
+# Initialiser Chroma pour la récupération
+CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
+COLLECTION_CSV = os.getenv('COLLECTION_CSV')
+
+# Charger la collection Chroma
+vectorstore = Chroma(persist_directory=CHROMA_PATH, 
+                     embedding_function=embedding_function, 
+                     collection_name=COLLECTION_CSV)
+
+# Créer le prompt pour le constructeur de requêtes
+prompt = get_query_constructor_prompt(
+            document_content_description,
+            metadata_field_info,
+            allowed_comparators=allowed_comparators,
+            examples=examples,
         )
-        print("ChromaDB initialized successfully.")
-        return chroma_db
-    except Exception as e:
-        print("Error initializing ChromaDB:", e)
-        print(traceback.format_exc())
-        return None
 
-# Créer le récupérateur SelfQueryRetriever
-def create_self_query_retriever(chroma_db: Chroma, llm) -> BaseRetriever:
-    try:
-        retriever = SelfQueryRetriever.from_llm(
-            vectorstore=chroma_db,
-            llm=llm,
-            search_kwargs={"k": 5}
-        )
-        print("SelfQueryRetriever created successfully.")
-        return retriever
-    except Exception as e:
-        print("Error creating SelfQueryRetriever:", e)
-        print(traceback.format_exc())
-        return None
 
-# Créer la chaîne de questions-réponses
-def create_qa_chain(llm, retriever) -> RetrievalQA:
-    try:
-        # Template de prompt pour le modèle BLOOM
-        template = """
-        Given the following question, please find the most relevant documents from the database and answer the question.
-        Question: {question}
-        Answer:"""
-        
-        prompt = PromptTemplate.from_template(template, input_variables=["question"])
-        qa_chain = RetrievalQA(
-            retriever=retriever,
-            llm_chain=LLMChain(llm=llm, prompt=prompt)
-        )
-        print("QA Chain created successfully.")
-        return qa_chain
-    except Exception as e:
-        print("Error creating QA Chain:", e)
-        print(traceback.format_exc())
-        return None
+output_parser = StructuredQueryOutputParser.from_components()
+query_constructor = prompt | llm | output_parser
 
-# Fonction principale pour gérer le QA
-def main():
-    # Charger le modèle et l'embedding function
-    llm = load_model()
-    embedding_function = load_embedding_function()
+# Initialiser le SelfQueryRetriever
+retriever = SelfQueryRetriever.from_llm(
+    llm,
+    vectorstore,
+    document_content_description,
+    metadata_field_info,
+    verbose=True,
+    enable_limit=True
+   
+)
 
-    if not llm or not embedding_function:
-        print("Failed to load necessary components.")
-        return
 
-    # Initialiser ChromaDB
-    chroma_db = initialize_chroma(embedding_function)
-    if not chroma_db:
-        print("Failed to initialize ChromaDB.")
-        return
+# Construire le template de prompt
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            'system',
+            """
+            Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des infos si elles ne sont pas dans le contexte.
+            Répond seulement si tu as la réponse. Affiche les produits trouvés dans un tableau avec comme colonnes: Référence, Marque, et Description.
+            Ne formate pas le contexte.si le context est vide dis moi que tu nas pas trouve
+            je veux que la reponse soit clair
+            avec des saut de ligne.
+            ne me donne pas des produit qui ne sont pas dans le context
+            
+            Contexte:
+            {context}
+            
+            Question: {question}
+            
+            Réponse :
+            """
+        ),
+    ]
+)
+def format_docs(docs):
+    """Formate chaque document avec un affichage lisible"""
+    return "\n\n\n".join(
+        f"Page Content:\n{doc.page_content}\n\nMetadata: {doc.metadata}"
+        for doc in docs
+    )
+# Création de la chaîne de traitement
+rag_chain_from_docs = (
+    RunnablePassthrough.assign(context=lambda x: format_docs(x["context"]))
+    | prompt
+    | llm
+    | StrOutputParser()
+)
 
-    # Créer SelfQueryRetriever
-    retriever = create_self_query_retriever(chroma_db, llm)
-    if not retriever:
-        print("Failed to create SelfQueryRetriever.")
-        return
+# Chaîne parallèle pour documents et question
+rag_chain_with_source = (
+    RunnableParallel(
+        {"context": retriever, "question": RunnablePassthrough()}
+    ).assign(answer=rag_chain_from_docs)
+)
 
-    # Créer la chaîne de QA
-    qa_chain = create_qa_chain(llm, retriever)
-    if not qa_chain:
-        print("Failed to create QA Chain.")
-        return
+# Requête de l'utilisateur
+query = "donne moi 2 produits de marque hp "
 
-    # Exemple de question
-    question = "give me 3 laptops of different brands that has i7 RAM 16GB ?"
-    
-    try:
-        # Utiliser la chaîne de QA pour répondre à la question
-        answer = qa_chain.run(question)
-        print(f"Question: {question}\nAnswer: {answer}")
-    except Exception as e:
-        print("Error running the QA Chain:", e)
-        print(traceback.format_exc())
+# Exécution de la requête
+result = rag_chain_with_source.invoke(query)
 
-if __name__ == "__main__":
-    main()
+# Afficher la réponse générée
+print(result)
+

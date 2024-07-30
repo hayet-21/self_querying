@@ -14,7 +14,7 @@ HF_TOKEN = os.getenv('API_TOKEN')
 
 def generate_data_store():
     try:
-        loader = CSVLoader(file_path=DATA_PATH_CSV, encoding='UTF-8')
+        loader = CSVLoader(file_path=DATA_PATH_CSV,source_column="Ref_produit",metadata_column=["Marque"], encoding='UTF-8')
         documents = load_documents(loader)
         if not documents:
             return
@@ -24,7 +24,7 @@ def generate_data_store():
             return
               # Assurez-vous de définir embedding_function avant de l'utiliser
         embedding_function = HuggingFaceInferenceAPIEmbeddings(api_key=HF_TOKEN, model_name="intfloat/multilingual-e5-large")
-        save_to_chroma(chunks, CHROMA_PATH, COLLECTION_CSV, embedding_function)
+        save_to_chroma(documents, CHROMA_PATH, COLLECTION_CSV, embedding_function)
     except Exception as e:
         print(f"An error occurred in generate_data_store: {e}")
     except Exception as e:

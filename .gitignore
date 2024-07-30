@@ -1,1 +1,10 @@
 env/
+src/model/utils_query.py
+src/model/query.py
+src/model/self_querying.py
+src/model/app.py
+src/model/cach.py
+src/model/llm.py
+src/model/query_chain.py
+
+
