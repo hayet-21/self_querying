@@ -91,7 +91,7 @@ retriever = SelfQueryRetriever.from_llm(
     enable_limit=True
    
 )
-question="find 2 TV samsung "
+question="find 2 Jeux vidéos nintendo "
 
 
 context =retriever.get_relevant_documents(question)
