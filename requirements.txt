@@ -2,3 +2,5 @@ groq
 requests
 numpy 
 pandas
+langchain_groq
+chromadb
