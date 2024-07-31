@@ -18,7 +18,7 @@ load_dotenv()
 # Récupérer la clé API Hugging Face
 HF_TOKEN = os.getenv('API_TOKEN')
 DATA_PATH_CSV = os.path.abspath(f"../{os.getenv('DATA_PATH_CSV')}")
-
+@st.cache_resource
 def load_embedding_function():
     try:
         embedding_function = HuggingFaceInferenceAPIEmbeddings(
@@ -74,68 +74,71 @@ retriever = SelfQueryRetriever.from_llm(
     verbose=True,
     search_kwargs={'k': 50}
 )
+# Interface Streamlit
+st.title("Assistant Vendeur Intelligent")
+st.write("Posez une question sur les produits:")
+question = st.text_input("Question", value="trouve les Ordinateurs intel core i5 de la marque Samsung")
+#question = "trouve les Ordinateurs intel core i5 de la marque Samsung"
+if st.button("Rechercher"):
+    # Récupérer le contexte associé à la question
+    context = retriever.invoke(question)
 
-question = "propose moi des produit Lenovo i7 "
+    # Vérification si le contexte est vide
+    if not context:
+        print("Je n'ai pas trouvé de produits correspondants.")
+    else:
+        # Embed the question using the Hugging Face embedding function
+        query_embedding = embedding_function.embed_query(question)
 
-# Récupérer le contexte associé à la question
-context = retriever.invoke(question)
+        # Embed the documents in the context using the Hugging Face embedding function
+        doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
 
-# Vérification si le contexte est vide
-if not context:
-    print("Je n'ai pas trouvé de produits correspondants.")
-else:
-    # Embed the question using the Hugging Face embedding function
-    query_embedding = embedding_function.embed_query(question)
+        # Calculate the cosine similarity between the query embedding and each document embedding
+        similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
 
-    # Embed the documents in the context using the Hugging Face embedding function
-    doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
-
-    # Calculate the cosine similarity between the query embedding and each document embedding
-    similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
-
-    # Get the indices of the top N most similar documents
-    top_n = 10
-    top_indices = np.argsort(-similarities)[:top_n]
-
-    # Get the top N most similar documents
-    top_docs = [context[i] for i in top_indices]
-
-    # Pass the top N most similar documents to the template
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                'system',
-                """
-                Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
-                Répond seulement si tu as la réponse. Affiche les produits un par un dans le format suivant:
-
-                Produit 1:
-                - Référence: 
-                - Categorie: 
-                - Marque: 
-                - Description: 
-                il faut savoir que laptop et pc et poste de travail ont le meme sens
-                Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
-
-                Contexte:
-                {context}
-
-                Question: {question}
-
-                Réponse : je vous propose ...
-                """
-            ),
+        # Get the indices of the top N most similar documents
+        filtered_docs = [
+            doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
         ]
-    )
 
-    document_chain = create_stuff_documents_chain(llm, prompt)
-    result = document_chain.invoke(
-        {
-            "context": top_docs,
-            "question": question, 
-        }
-    )
+        
 
-    print(result)
+        # Pass the top N most similar documents to the template
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    'system',
+                    """
+                    Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
+                    Répond seulement si tu as la réponse. Affiche les produits un par un dans le format suivant:
+
+                    Produit 1:
+                    - Référence: 
+                    - Categorie: 
+                    - Marque: 
+                    - Description: 
+                    il faut savoir que laptop et pc et poste de travail ont le meme sens
+                    Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
+
+                    Contexte:
+                    {context}
+
+                    Question: {question}
+
+                    Réponse : je vous propose ...
+                    """
+                ),
+            ]
+        )
+
+        document_chain = create_stuff_documents_chain(llm, prompt)
+        result = document_chain.invoke(
+            {
+                "context": filtered_docs,
+                "question": question, 
+            }
+        )
+
+        st.write(result)
 
 
