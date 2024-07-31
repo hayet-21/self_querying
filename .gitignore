@@ -6,6 +6,6 @@ src/model/app.py
 src/model/cach.py
 src/model/llm.py
 src/model/query_chain.py
-src/data/
+
 
 
