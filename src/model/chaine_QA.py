@@ -1,21 +1,16 @@
+from dotenv import load_dotenv
 import os
 import streamlit as st
-from dotenv import load_dotenv
-from langchain.chains import RetrievalQA
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.messages import HumanMessage
-from langchain_huggingface import HuggingFaceEndpoint
 from langchain_community.vectorstores import Chroma
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.docstore.document import Document
 from langchain.chains.query_constructor.base import AttributeInfo
 from langchain.retrievers.self_query.base import SelfQueryRetriever
 from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-from langchain.retrievers.self_query.chroma import ChromaTranslator
-from langchain_core.runnables import RunnableParallel, RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
 from langchain_groq import ChatGroq
-from langchain_community.document_loaders.csv_loader import CSVLoader
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -38,24 +33,28 @@ def load_embedding_function():
 
 embedding_function = load_embedding_function()
 
+
+
 # Description du contenu du document
-document_content_description = "Information about the product, including reference, description, brand."
+document_content_description = "Informations sur le produit, incluant la reference et la description. Do not use the word 'contains' or 'contain' as filters. "
+
 # Métadonnées des attributs
 metadata_field_info = [
     AttributeInfo(
         name="Marque",
-        description="The brand of the product.",
+        description="La Marque du produit.",
         type="string",
+        
     ),
     AttributeInfo(
         name="Categorie",
-        description="The category of the product.",
+        description="La Categorie du produit.",
         type="string",
-    ),
+    )
 ]
 
-GROQ_TOKEN = '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'
-llm = ChatGroq(model_name='llama3-8b-8192', api_key=GROQ_TOKEN, temperature=0)
+GROQ_TOKEN='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'
+llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key= GROQ_TOKEN,temperature=0)
 
 # Initialiser Chroma pour la récupération
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
@@ -73,17 +72,35 @@ retriever = SelfQueryRetriever.from_llm(
     document_content_description,
     metadata_field_info,
     verbose=True,
-    enable_limit=True
+    search_kwargs={'k': 50}
 )
 
-# Interface utilisateur avec Streamlit
-st.title("Product Finder")
-question = st.text_input("Enter your query:", value="find 2 HP laptops")
+question = "propose moi des produit Lenovo i7 "
 
-if st.button("Search"):
-    context = retriever.invoke(question)
+# Récupérer le contexte associé à la question
+context = retriever.invoke(question)
 
-    # Construire le template de prompt
+# Vérification si le contexte est vide
+if not context:
+    print("Je n'ai pas trouvé de produits correspondants.")
+else:
+    # Embed the question using the Hugging Face embedding function
+    query_embedding = embedding_function.embed_query(question)
+
+    # Embed the documents in the context using the Hugging Face embedding function
+    doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
+
+    # Calculate the cosine similarity between the query embedding and each document embedding
+    similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
+
+    # Get the indices of the top N most similar documents
+    top_n = 10
+    top_indices = np.argsort(-similarities)[:top_n]
+
+    # Get the top N most similar documents
+    top_docs = [context[i] for i in top_indices]
+
+    # Pass the top N most similar documents to the template
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -92,12 +109,12 @@ if st.button("Search"):
                 Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
                 Répond seulement si tu as la réponse. Affiche les produits un par un dans le format suivant:
 
-                - Produit 1:
+                Produit 1:
                 - Référence: 
                 - Categorie: 
                 - Marque: 
                 - Description: 
-              
+                il faut savoir que laptop et pc et poste de travail ont le meme sens
                 Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
 
                 Contexte:
@@ -105,7 +122,7 @@ if st.button("Search"):
 
                 Question: {question}
 
-                Réponse :
+                Réponse : je vous propose ...
                 """
             ),
         ]
@@ -114,9 +131,11 @@ if st.button("Search"):
     document_chain = create_stuff_documents_chain(llm, prompt)
     result = document_chain.invoke(
         {
-            "context": context,
-            "question": question,  # Use 'question' instead of 'messages'
+            "context": top_docs,
+            "question": question, 
         }
     )
 
-    st.text_area("Result", value=result, height=300)
+    print(result)
+
+

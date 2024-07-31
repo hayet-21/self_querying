@@ -1,33 +1,46 @@
-import csv
-from typing import List, Optional
-from langchain.document_loaders.base import BaseLoader
-from langchain.docstore.document import Document
-from dotenv import load_dotenv
 import os
-from insert_data import insert_chroma
-from langchain_community.document_loaders import CSVLoader
+from dotenv import load_dotenv
+from langchain_community.vectorstores import Chroma
+from langchain_community.document_loaders.csv_loader import CSVLoader
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 
-# Charger les variables d'environnement
 load_dotenv()
-
-# Définir le chemin vers le fichier CSV à partir des variables d'environnement
+# Charger les variables d'environnement
+# Récupérer la clé API Hugging Face
+HF_TOKEN = os.getenv('API_TOKEN')
 DATA_PATH_CSV = os.path.abspath(f"../{os.getenv('DATA_PATH_CSV')}")
+CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
+COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 
-# Exemple d'utilisation
-csv_loader = CSVLoader(
-    file_path=DATA_PATH_CSV,  # Chemin vers votre fichier CSV
-)
+def transform(embedding_function):
+    loader = CSVLoader(file_path=DATA_PATH_CSV,
+    metadata_columns=["Marque","Categorie"],   # Optional: Include 'Marque' as metadata
+    csv_args={"delimiter": ","},  # Specify delimiter if needed
+    encoding="utf-8"
+    )
+    documents = loader.load()
+    chroma_instance = Chroma(embedding_function= embedding_function, persist_directory=CHROMA_PATH, collection_name=COLLECTION_CSV)
+    # chroma_instance.delete(chroma_instance.get()['ids'])
+    chroma_instance.add_documents(documents)
+    chroma_instance.persist()
+    print("There are", chroma_instance._collection.count(), "documents in the collection")
+    
+def load_embedding_function():
+    try:
+        embedding_function = HuggingFaceInferenceAPIEmbeddings(
+            api_key=HF_TOKEN,
+            model_name="intfloat/multilingual-e5-large"
+        )
+        print("Embedding function loaded successfully.")
+        return embedding_function
+    except Exception as e:
+        print("Error loading embedding function:", e)
+        return None
 
-# Charger les documents depuis le fichier CSV
-documents = csv_loader.load()
+embedding_function = load_embedding_function()
 
-# Afficher les documents chargés
-for doc in documents:
-    print("Page Content:")
-    print(doc.page_content)
-    print("Metadata:", doc.metadata)
-    print("-" * 80)
 
-# Insérer les documents dans Chroma
-insert_chroma(documents)
+transform(embedding_function)
+        
+
 
