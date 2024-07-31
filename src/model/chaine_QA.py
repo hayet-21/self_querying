@@ -75,7 +75,7 @@ retriever = SelfQueryRetriever.from_llm(
     search_kwargs={'k': 50}
 )
 # Interface Streamlit
-st.title("Assistant DGF  ")
+st.title("Sales smart Assistant  ")
 st.write("Posez une question sur les produits:")
 question = st.text_input("Question", value="trouve les Ordinateurs intel core i5 de la marque Samsung")
 #question = "trouve les Ordinateurs intel core i5 de la marque Samsung"
