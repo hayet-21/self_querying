@@ -17,7 +17,7 @@ HF_TOKEN = os.getenv('API_TOKEN')
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
-
+llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
 def load_embedding_function():
     try:
         embedding_function = HuggingFaceInferenceAPIEmbeddings(
@@ -81,12 +81,49 @@ def query_bot(retriever, embedding_function, question):
             'Categorie': doc.metadata.get('Categorie', 'N/A'),
             'Marque': doc.metadata.get('Marque', 'N/A'),
             'Description': doc.page_content
+            
         }
         for doc in filtered_docs
     ]
-    
-    
-    return data
+    df = pd.DataFrame(data)
+    # Construire le template de prompt
+    prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    'system',
+                    """
+                    Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
+                    Répond seulement si tu as la réponse. Affiche les produits un par un dans le format suivant:
+
+                    Produit 1:
+                    - Référence: 
+                    - Categorie: 
+                    - Marque: 
+                    - Description: 
+                    il faut savoir que laptop , ordinateur et pc et poste de travail ont le meme sens
+                    Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
+
+                
+                    Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
+                    Contexte:
+                    {context}
+
+                    Question: {question}
+
+                    Réponse :
+                    """
+                ),
+            ]
+        )
+
+    document_chain = create_stuff_documents_chain(llm, prompt)
+    result = document_chain.invoke(
+            {
+                "context": filtered_docs,
+                "question": question # Use 'question' instead of 'messages'
+            },
+    )
+    return result
 def extract_product_info(text):
     products = []
     lines = text.strip().split('\n\n')

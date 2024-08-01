@@ -22,6 +22,8 @@ if st.button("Rechercher"):
     result = query_bot(retriever, embedding_function, question)
     #df = pd.DataFrame(product_list)
     #st.table(df)
-    st.write(result)
-    
+    product_list=extract_product_info(result)
+    st.write(product_list)
+
+
     
