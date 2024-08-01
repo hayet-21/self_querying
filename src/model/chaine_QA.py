@@ -11,30 +11,15 @@ from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_groq import ChatGroq
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-
+from csv_transformation import load_embedding_function
+#import pandas as pd
 # Charger les variables d'environnement
 load_dotenv()
 
 # Récupérer la clé API Hugging Face
 HF_TOKEN = os.getenv('API_TOKEN')
 DATA_PATH_CSV = os.path.abspath(f"../{os.getenv('DATA_PATH_CSV')}")
-@st.cache_resource
-def load_embedding_function():
-    try:
-        embedding_function = HuggingFaceInferenceAPIEmbeddings(
-            api_key=HF_TOKEN,
-            model_name="intfloat/multilingual-e5-large"
-        )
-        print("Embedding function loaded successfully.")
-        return embedding_function
-    except Exception as e:
-        print("Error loading embedding function:", e)
-        return None
-
 embedding_function = load_embedding_function()
-
-
-
 # Description du contenu du document
 document_content_description = "Informations sur le produit, incluant la reference et la description. Do not use the word 'contains' or 'contain' as filters. "
 
@@ -75,7 +60,7 @@ retriever = SelfQueryRetriever.from_llm(
     search_kwargs={'k': 50}
 )
 # Interface Streamlit
-st.title("Sales smart Assistant  ")
+st.title("Sales smart Assistant  DGF  ")
 st.write("Posez une question sur les produits:")
 question = st.text_input("Question", value="trouve les Ordinateurs intel core i5 de la marque Samsung")
 #question = "trouve les Ordinateurs intel core i5 de la marque Samsung"
@@ -137,8 +122,5 @@ if st.button("Rechercher"):
                 "context": filtered_docs,
                 "question": question, 
             }
-        )
-
-        st.write(result)
-
-
+        )   
+        st.markdown(result)
