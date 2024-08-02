@@ -8,6 +8,8 @@ from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_groq import ChatGroq
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
+from langchain_community.vectorstores import Qdrant
+import qdrant_client
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -29,13 +31,13 @@ def load_embedding_function():
         print(f"Error loading embedding function: {e}")
         return None
 
-def initialize_vectorstore(embedding_function):
-    vectorstore = Chroma(
-        persist_directory=CHROMA_PATH, 
-        embedding_function=embedding_function, 
-        collection_name=COLLECTION_CSV
-    )
-    return vectorstore
+def initialize_vectorstore(embedding_function,QDRANT_URL,QDRANT_API_KEY,collection_name):
+    qdrantClient = qdrant_client.QdrantClient(
+        url=QDRANT_URL,
+        prefer_grpc=True,
+        api_key=QDRANT_API_KEY)
+    return Qdrant(qdrantClient, collection_name, embedding_function, vector_name='vector_params')
+
 
 def initialize_retriever(llm, vectorstore):
     document_content_description = "Informations sur le produit, incluant la reference et la description."
