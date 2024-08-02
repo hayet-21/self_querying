@@ -102,9 +102,9 @@ def query_bot(retriever, embedding_function, question):
                     - Categorie: 
                     - Marque: 
                     - Description: 
-                    il faut savoir que laptop , ordinateur et pc et poste de travail ont le meme sens
-                    Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
-
+                    il faut savoir que laptop , ordinateur et pc et poste de travail ont tous le meme sens
+                    il faut savoir que telephone portable et smartphone ont le meme sens
+                    il faut savoir que tout autre caracterisque du produit tel que la ram stockage font partie de la description du produit et il faut filtrer selon la marque et le categorie seulement.
                 
                     Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
                     Contexte:
@@ -127,6 +127,8 @@ def query_bot(retriever, embedding_function, question):
     )
     return result
 def extract_product_info(text):
+    if not text or text.strip() == "Je n'ai pas trouvé de produits correspondants.":
+        return []
     products = []
     lines = text.strip().split('\n\n')
     for line in lines:

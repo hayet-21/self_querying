@@ -21,15 +21,18 @@ st.set_page_config(
     page_icon="🧠",
 )
 st.title(" 🧠 Sales Smart Assistant DGF")
-st.write("🔍Posez une question sur les produits:")
+st.write(" Posez une question sur les produits:")
 question = st.text_input("Question", value="trouve les Ordinateurs intel core i5 de la marque Samsung")
 
-if st.button("Rechercher"):
+if st.button(" 🔍 Rechercher"):
     result = query_bot(retriever, embedding_function, question)
+    #st.write(result)
     product_list=extract_product_info(result)
-    df = pd.DataFrame(product_list)
-    st.table(df)
-    
+    if not product_list:
+        st.write("Je n'ai pas trouvé de produits correspondants.")
+    else:
+        df = pd.DataFrame(product_list)
+        st.table(df)  
 
 
     
