@@ -1,7 +1,7 @@
 import streamlit as st
 from pipline import load_embedding_function, initialize_vectorstore, initialize_retriever, query_bot ,extract_product_info
 from langchain_groq import ChatGroq
-import pandas as pd
+
 # Charger la fonction d'embedding
 embedding_function = load_embedding_function()
 

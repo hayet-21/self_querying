@@ -77,17 +77,6 @@ def query_bot(retriever, embedding_function, question):
         doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
     ]
 
-    data = [
-        {
-            'Référence': doc.metadata.get('Ref_produit', 'N/A'),
-            'Categorie': doc.metadata.get('Categorie', 'N/A'),
-            'Marque': doc.metadata.get('Marque', 'N/A'),
-            'Description': doc.page_content
-            
-        }
-        for doc in filtered_docs
-    ]
-    df = pd.DataFrame(data)
     # Construire le template de prompt
     prompt = ChatPromptTemplate.from_messages(
             [
