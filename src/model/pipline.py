@@ -95,13 +95,7 @@ def query_bot(retriever, embedding_function, question):
                     'system',
                     """
                     Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
-                    Répond seulement si tu as la réponse. Affiche les produits un par un dans le format suivant:
-
-                    Produit 1:
-                    - Référence: 
-                    - Categorie: 
-                    - Marque: 
-                    - Description: 
+                    Répond seulement si tu as la réponse. Affiche les produits un par un sous forme de tableau qui contient ces colonne Référence,Categorie, Marque, Description.
                     il faut savoir que laptop , ordinateur et pc et poste de travail ont tous le meme sens
                     il faut savoir que telephone portable et smartphone ont le meme sens
                     il faut savoir que tout autre caracterisque du produit tel que la ram stockage font partie de la description du produit et il faut filtrer selon la marque et le categorie seulement.
@@ -117,7 +111,7 @@ def query_bot(retriever, embedding_function, question):
                 ),
             ]
         )
-
+    
     document_chain = create_stuff_documents_chain(llm, prompt)
     result = document_chain.invoke(
             {
