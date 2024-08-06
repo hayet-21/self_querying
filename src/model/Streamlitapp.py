@@ -26,7 +26,8 @@ question = st.chat_input("ex : trouve les Ordinateurs intel core i5 de la marque
 if question:
     result = query_bot(retriever, embedding_function, question)
     
-    st.markdown(result)  
-
+    # Affichage du résultat de la question
+    st.markdown("### Résultat")
+    st.markdown(result)
 
     
