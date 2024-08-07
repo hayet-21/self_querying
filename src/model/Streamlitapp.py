@@ -10,7 +10,7 @@ GROQ_TOKEN = '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'
 llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
 api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
-collection_name= "icecat_collection"
+collection_name= "lvHP_collection"
 # Initialiser le vectorstore et le retriever
 vectorstore = initialize_vectorstore(embedding_function,url,api_key,collection_name)
 retriever = initialize_retriever(llm, vectorstore)

@@ -40,7 +40,7 @@ def initialize_vectorstore(embedding_function, QDRANT_URL, QDRANT_API_KEY, colle
         url=QDRANT_URL,
         prefer_grpc=True,
         api_key=QDRANT_API_KEY)
-    return Qdrant(qdrantClient, collection_name, embedding_function, vector_name='vector_params')
+    return Qdrant(qdrantClient, collection_name, embedding_function) #, vector_name='vector_params'
 
 
 def initialize_retriever(llm, vectorstore):
