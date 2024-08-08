@@ -95,6 +95,8 @@ def query_bot(retriever, embedding_function, question):
                 
                     Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
                     si je te pose une question sur les question ou les reponses fournient precedement tu doit me repondre selon l'historique.
+                    tu ne doit pas oublier l'historique car parfois le user continue a te poser des question sur tes reponses que tas deja fourni aupatavant
+    
                     Contexte: {context}
                     historique :{historique}
                     Question: {question}
