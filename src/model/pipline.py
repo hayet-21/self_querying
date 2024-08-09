@@ -92,8 +92,9 @@ def query_bot(retriever, embedding_function, question):
                     Il faut savoir que laptop, ordinateur, ordinateurs portable , pc et poste de travail ont tous le même sens.
                     Il faut savoir que téléphone portable et smartphone ont le même sens.
                     Il faut savoir que tout autre caractéristique du produit tel que la RAM stockage font partie de la description du produit et il faut filtrer selon la marque et la catégorie seulement.
-                
                     Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
+                    lorsque une question de similarite entre des produits est poser, il faut dabord commencer par les produit qui ont des processeur qui se ressemble le plus, puis la memoire ram , puis le stockage, puis les autres caracteristique
+
                     si je te pose une question sur les question ou les reponses fournient precedement tu doit me repondre selon l'historique.
                     tu ne doit pas oublier l'historique car parfois le user continue a te poser des question sur tes reponses que tas deja fourni aupatavant
     
@@ -108,7 +109,7 @@ def query_bot(retriever, embedding_function, question):
         )
     
     document_chain = create_stuff_documents_chain(llm, prompt)
-    
+              
     # Charger l'historique des conversations
     conversation_history = memory.load_memory_variables({})
 

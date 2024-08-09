@@ -11,7 +11,7 @@ llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, tempera
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
 
 api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
-collection_name= "lvHP_collection"
+collection_name="lenovoHP_collection"
 # Initialiser le vectorstore et le retriever
 vectorstore = initialize_vectorstore(embedding_function,url,api_key,collection_name)
 retriever = initialize_retriever(llm, vectorstore)
@@ -38,7 +38,7 @@ if question:
     result = query_bot(retriever, embedding_function, question)
     
     # Append the bot's response to the chat history
-    st.session_state.messages.append({"role": "bot", "content": result})
+    st.session_state.messages.append({"role": "ai", "content": result})
     
     # Display the conversation
     for message in st.session_state.messages:
