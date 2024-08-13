@@ -1,61 +1,101 @@
 import streamlit as st
-import os
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-from langchain_community.document_loaders import PyMuPDFLoader
-from langchain_groq import ChatGroq 
-from langchain_core.prompts import PromptTemplate
-from langchain_community.document_loaders import Docx2txtLoader
-import pymupdf4llm
+from pipline import load_embedding_function, initialize_vectorstore, initialize_retriever, query_bot ,pdf_reader
+from langchain_groq import ChatGroq
+import asyncio
+import time ,os
+from langchain_core.prompts import ChatPromptTemplate
 
-# Constants
-API_TOKEN = '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'
+# Charger la fonction d'embedding
+embedding_function = load_embedding_function()
+
+# Initialiser le modèle LLM
 GROQ_TOKEN = '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'
-MBD_MODEL = 'intfloat/multilingual-e5-large'
-
-# Initialize the embedding model and language model
-embeddings_model = HuggingFaceInferenceAPIEmbeddings(api_key=API_TOKEN, model_name=MBD_MODEL)
 llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
+FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
+api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
+collection_name="lenovoHP_collection"
 
-# Load the PDF
-def load_pdf(pdf_path: str):
-    loader = PyMuPDFLoader(pdf_path)
-    documents = loader.load()
-    return documents
+document_content_description = "Informations sur le produit, incluant la référence et la description."
+metadata_field_info = [
+        {
+            'name': "Marque",
+            'description': "La Marque du produit.",
+            'type': "string",
+        },
+        {
+            'name': "Categorie",
+            'description': "La Categorie du produit.",
+            'type': "string",
+        }
+    ]
+# Initialiser le vectorstore et le retriever
+vectorstore = initialize_vectorstore(embedding_function,url,api_key,collection_name)
+retriever = initialize_retriever(llm, vectorstore,metadata_field_info,document_content_description)
+# Construire le template de prompt
+prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                'system',
+                """
+                Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
+                Répond seulement si tu as la réponse. Affiche les produits un par un sous forme de tableau qui contient ces colonne Référence,Categorie, Marque, Description.
+                Il faut savoir que laptop, ordinateur, ordinateurs portable , pc et poste de travail ont tous le même sens.
+                Il faut savoir que téléphone portable et smartphone ont le même sens.
+                Il faut savoir que tout autre caractéristique du produit tel que la RAM stockage font partie de la description du produit et il faut filtrer selon la marque et la catégorie seulement.
+                Si le contexte est vide, dis-moi que tu n'as pas trouvé de produits correspondants. Je veux que la réponse soit claire et facile à lire, avec des sauts de ligne pour séparer chaque produit. Ne me donne pas de produits qui ne sont pas dans le contexte.
+                lorsque une question de similarite entre des produits est poser, il faut dabord commencer par les produit qui ont des processeur qui se ressemble le plus, puis la memoire ram , puis le stockage, puis les autres caracteristique
+                la question peut contenir  plusieurs produits avec differentes descriptions, il faut chercher sur les differents produits demandé .
+                si je te pose une question sur les question ou les reponses fournient precedement tu doit me repondre selon l'historique.
+                tu ne doit pas oublier l'historique car parfois le user continue a te poser des question sur tes reponses que tas deja fourni aupatavant
 
-# Load the PDF
-def load_doc(pdf_path: str):
-    loader = Docx2txtLoader(pdf_path)
-    documents = loader.load()
-    return documents
+                Contexte: {context}
+                historique :{historique}
+                Question: {question}
 
-
-# Streamlit UI
-st.title("PDF Query System")
-
-query = st.chat_input("Ask a question about the PDF:")
-
-if query:
-    # Load the PDF and generate embeddings
-    file_path = "../data/pdf_query_sample.pdf"
-    #pdf_path = "../data/pdf_query_sample.pdf"
-    #pdf_path = "../data/pdef2.pdf"
-    file_extension = os.path.splitext(file_path)[1].lower()
-   
-    if file_extension == '.pdf':
-        #documents = load_pdf(pdf_path)
-        #documents_text = ' '.join([doc.page_content for doc in documents])
-        documents_text = pymupdf4llm.to_markdown(file_path)
-    elif file_extension == '.docx' :
-        doc=load_doc(file_path)
-        documents_text= ' '.join([doc.page_content for doc in doc])
-
-    prompt_template = PromptTemplate.from_template(
-    "On se basant sur le context  : {documents_text} repond moi a la question: {query} , si la question est sur les produit alors dans la reponse tu doit me fournir que les caracteristique technique des produit ne me donne pas la data de livraison , la quantite etc. Si le context est vide dis moi que tu nas pas trouve"
-)
-    # Create the prompt    
-    #prompt = prompt_template.format(documents_text=documents_text, query=query)
+                Réponse :
+                """
+            ),
+        ]
+    )
     
-    # Get response from the LLM
-    chain = prompt_template | llm
-    response=chain.invoke({"documents_text": {documents_text},"query":{query}})
-    st.markdown(response.content)
+# Interface Streamlit
+st.set_page_config(
+    page_title="EquotIA",
+    page_icon="🧠",
+)
+st.title("🧠 Sales Smart Assistant DGF")
+
+uploaded_file = st.file_uploader("Upload a PDF file")
+# Initialiser la session_state pour stocker l'historique des messages
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
+if uploaded_file is not None:
+    # Save the uploaded file temporarily
+    temp_file_path = f"./temp_{uploaded_file.name}"
+    with open(temp_file_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    # Call the pdf_reader function and use the result as the input question
+    pdf_text = pdf_reader(temp_file_path, llm)
+    st.markdown(pdf_text)
+    question = st.chat_input("ex : trouve les Ordinateurs intel core i5 de la marque Samsung")
+
+    # Delete the temporary file
+    os.remove(temp_file_path)
+
+    # Proceed with the bot response using the extracted question
+    if question:
+        st.session_state.messages.append({"role": "user", "content": question})
+        start_time = time.time()
+
+        # Get the bot's response
+        result = asyncio.run(query_bot(retriever, embedding_function, question, prompt))
+
+        exec_time = time.time() - start_time
+        st.session_state.messages.append({"role": "ai", "content": f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+
+        # Display the conversation
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])

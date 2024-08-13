@@ -12,7 +12,7 @@ embedding_function = load_embedding_function()
 GROQ_TOKEN = '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'
 llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
-
+FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
 api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
 collection_name="lenovoHP_collection"
 
@@ -66,6 +66,7 @@ st.set_page_config(
 )
 st.title("🧠 Sales Smart Assistant DGF")
 
+uploaded_file = st.file_uploader("Upload a PDF file")
 # Initialiser la session_state pour stocker l'historique des messages
 if 'messages' not in st.session_state:
     st.session_state.messages = []

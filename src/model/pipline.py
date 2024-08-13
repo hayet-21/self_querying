@@ -9,7 +9,11 @@ from sklearn.metrics.pairwise import cosine_similarity
 from langchain.memory import ConversationBufferMemory # Import de la mémoire
 from langchain_community.vectorstores import Qdrant
 import qdrant_client
-
+from langchain_community.document_loaders import Docx2txtLoader
+from langchain_community.document_loaders import PyMuPDFLoader
+from langchain_core.prompts import PromptTemplate
+from langchain_community.document_loaders import Docx2txtLoader
+import pymupdf4llm
 
 #trouve les PC HP intel core i7
 # Charger les variables d'environnement
@@ -82,3 +86,74 @@ async def query_bot(retriever, embedding_function, question,prompt):
     
 
     return result
+
+# Load the PDF
+def load_pdf(pdf_path: str):
+    loader = PyMuPDFLoader(pdf_path)
+    documents = loader.load()
+    return documents
+
+# Load the PDF
+def load_doc(pdf_path: str):
+    loader = Docx2txtLoader(pdf_path)
+    documents = loader.load()
+    return documents
+
+def pdf_reader(file_path,llm):
+    # Load the document based on its extension
+    file_extension = os.path.splitext(file_path)[1].lower()
+    if file_extension == '.pdf':
+        documents_text = pymupdf4llm.to_markdown(file_path)
+    elif file_extension == '.docx' :
+        doc=load_doc(file_path)
+        documents_text= ' '.join([doc.page_content for doc in doc])
+    else:
+        return "Unsupported file format"
+
+    # Create the prompt template
+    prompt_template = PromptTemplate.from_template(
+        """Tu es Un assistant AI super helpful.On se basant sur le context : {documents_text} repond moi a la question: {query} come suit :
+        1- Extraire toutes les decriptions et les descriptions des produits qui se trouvent à l'interieur du contexte. \
+        2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
+        3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
+        4- Mettre chaque description sur une ligne. \
+        5- Retourner La reponse brute sans commentaire de ta part.
+        ------------
+        Reponse:"""
+    )
+
+    # Generate the response based on the products listed in the PDF
+    query = "Quels sont les produits listés dans ce document ?"
+    chain = prompt_template | llm
+    response = chain.invoke({"documents_text": documents_text, "query": query})
+
+    return response.content
+def extract_text_from_img(img):
+        text= ocr.image_to_string(img)
+        return text
+
+def extract_text_from_pdf(pdf):
+        file= pymupdf.open(pdf)
+        p= file[0].get_text()
+        text= ''
+        if bool(p.strip()):
+                text= pymupdf4llm.to_markdown(pdf)
+                file.close()
+        else:
+                for page in file:
+                        tp= file.get_textpage_ocr()
+                        text += f" {tp.extractTEXT()} \n\n" 
+        return text
+                        
+
+def extract_text_from_file(filepath):
+        _, ext= os.path.splitext(filepath)
+        assert ext in FILE_TYPES, f'wrong file type. the file must be on of following {FILE_TYPES}'
+        if ext == '.pdf':
+                return extract_text_from_pdf(filepath)
+        else:
+                return extract_text_from_img(filepath)
+        
+def parse_file(filepath, parser= pdf_chain):
+        text= extract_text_from_file(filepath)
+        return parser.invoke(text)
