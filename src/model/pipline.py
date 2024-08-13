@@ -112,14 +112,16 @@ def pdf_reader(file_path,llm):
 
     # Create the prompt template
     prompt_template = PromptTemplate.from_template(
-        """Tu es Un assistant AI super helpful.On se basant sur le context : {documents_text} repond moi a la question: {query} come suit :
+       " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
         1- Extraire toutes les decriptions et les descriptions des produits qui se trouvent à l'interieur du contexte. \
         2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
         3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
         4- Mettre chaque description sur une ligne. \
-        5- Retourner La reponse brute sans commentaire de ta part.
-        ------------
-        Reponse:"""
+        5-repond avec la meme langue du text dans le context\
+        6- Ne donne pas de commentaire de ta part.\
+        context : {documents_text} \
+        ------------\
+        response : "
     )
 
     # Generate the response based on the products listed in the PDF
@@ -128,6 +130,7 @@ def pdf_reader(file_path,llm):
     response = chain.invoke({"documents_text": documents_text, "query": query})
 
     return response.content
+'''
 def extract_text_from_img(img):
         text= ocr.image_to_string(img)
         return text
@@ -157,3 +160,4 @@ def extract_text_from_file(filepath):
 def parse_file(filepath, parser= pdf_chain):
         text= extract_text_from_file(filepath)
         return parser.invoke(text)
+'''
