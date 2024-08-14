@@ -5,17 +5,19 @@ import asyncio
 import time
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser # parser
-import pymupdf, pymupdf4llm, pytesseract as ocr
+import pymupdf, pymupdf4llm
+import pytesseract 
 from langchain_core.prompts import PromptTemplate
 import os
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 # Charger la fonction d'embedding
 embedding_function = load_embedding_function()
 
 # Initialiser le modèle LLM
-GROQ_TOKEN = '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'
-llm = ChatGroq(model_name='llama3-8b-8192', api_key=GROQ_TOKEN, temperature=0)
+GROQ_TOKEN = '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'
+llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+llm2 =ChatGroq(model_name="llama3-70b-8192",api_key=GROQ_TOKEN,temperature=0)
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
-FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
 api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
 collection_name="lenovoHP_collection"
 FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx']
@@ -34,10 +36,10 @@ pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un
 Réponse :"""
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
-pdf_chain=  pdf_prompt | llm
+pdf_chain=  pdf_prompt | llm2
 
 def extract_text_from_img(img):
-    text = ocr.image_to_string(img)
+    text = pytesseract.image_to_string(img)
     return text
 
 def extract_text_from_pdf(pdf):
@@ -131,24 +133,25 @@ if 'messages' not in st.session_state:
 query= st.chat_input('comment puis-je vous aidez?')
 uploaded_file = st.file_uploader("Téléchargez un fichier PDF contenant des produits", type=FILE_TYPES)
 
-if query or uploaded_file:
-    extracted_text= ''
+if uploaded_file or query:
+    full_query = query
     if uploaded_file:
-        # Save the uploaded file temporarily
+         # Save the uploaded file temporarily
         temp_file_path = f"./temp_{uploaded_file.name}"
         with open(temp_file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
-
+        extracted_text=''
         extracted_text = parse_file(temp_file_path)
-    
-    full_query= f"donne moi ces produit : \n{extracted_text}"
-   
+        full_query = f"Trouves ces produits  : \n{extracted_text}"
+        st.markdown(extracted_text)
+        #os.remove(temp_file_path)
+    else:
+        full_query = query
     # Append the user's input to the chat history
     st.session_state.messages.append({"role": "user", "content": full_query})
 
     # Delete the temporary file
-    os.remove(temp_file_path)
-
+   
     start_time =time.time()
     # Get the bot's response
     result= asyncio.run(query_bot(retriever, embedding_function, full_query,prompt))
