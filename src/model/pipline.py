@@ -13,7 +13,10 @@ from langchain_community.document_loaders import Docx2txtLoader
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_core.prompts import PromptTemplate
 from langchain_community.document_loaders import Docx2txtLoader
-import pymupdf4llm
+import pymupdf4llm , pymupdf,pytesseract as ocr
+from langchain_core.output_parsers import StrOutputParser # parser
+from langchain_core.prompts import PromptTemplate
+
 
 #trouve les PC HP intel core i7
 # Charger les variables d'environnement
@@ -25,6 +28,8 @@ CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
 llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
+
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 memory = ConversationBufferMemory()
@@ -87,50 +92,22 @@ async def query_bot(retriever, embedding_function, question,prompt):
 
     return result
 
-# Load the PDF
-def load_pdf(pdf_path: str):
-    loader = PyMuPDFLoader(pdf_path)
-    documents = loader.load()
-    return documents
 
-# Load the PDF
-def load_doc(pdf_path: str):
-    loader = Docx2txtLoader(pdf_path)
-    documents = loader.load()
-    return documents
+# Define the prompt template and chain
+pdf_prompt_instruct= """Tu es Un assistant AI super helpful. Étant donné un contexte qui est le texte brut issu d'une image ou d'un PDF, ton travail est simple :
+1- Extraire toutes les descriptions des produits qui se trouvent à l'intérieur du contexte.
+2- Reformuler, si besoin, les descriptions en étant le plus fidèle possible à la description originale.
+3- NE JAMAIS GÉNÉRER de réponse de ta part si le contexte est vide ou s'il n'y a pas assez d'informations.
+4- Mettre chaque description sur une ligne.
+5- NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION JUST DROP THE TEXT.
 
-def pdf_reader(file_path,llm):
-    # Load the document based on its extension
-    file_extension = os.path.splitext(file_path)[1].lower()
-    if file_extension == '.pdf':
-        documents_text = pymupdf4llm.to_markdown(file_path)
-    elif file_extension == '.docx' :
-        doc=load_doc(file_path)
-        documents_text= ' '.join([doc.page_content for doc in doc])
-    else:
-        return "Unsupported file format"
+{contexte}
+------------
+Réponse: trouve les produits qui correspondent à ces descriptions :
+"""
 
-    # Create the prompt template
-    prompt_template = PromptTemplate.from_template(
-       " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
-        1- Extraire toutes les decriptions et les descriptions des produits qui se trouvent à l'interieur du contexte. \
-        2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
-        3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
-        4- Mettre chaque description sur une ligne. \
-        5-repond avec la meme langue du text dans le context\
-        6- Ne donne pas de commentaire de ta part.\
-        context : {documents_text} \
-        ------------\
-        response : "
-    )
-
-    # Generate the response based on the products listed in the PDF
-    query = "Quels sont les produits listés dans ce document ?"
-    chain = prompt_template | llm
-    response = chain.invoke({"documents_text": documents_text, "query": query})
-
-    return response.content
-'''
+pdf_prompt= PromptTemplate.from_template(pdf_prompt_instruct)
+pdf_chain = pdf_prompt | llm | StrOutputParser()
 def extract_text_from_img(img):
         text= ocr.image_to_string(img)
         return text
@@ -160,4 +137,3 @@ def extract_text_from_file(filepath):
 def parse_file(filepath, parser= pdf_chain):
         text= extract_text_from_file(filepath)
         return parser.invoke(text)
-'''
