@@ -150,11 +150,12 @@ with st.sidebar:
         with open(filepath, 'wb') as up_file:
             up_file.write(data)
         st.session_state.extracted_text = parse_file(filepath)
-        os.remove(filepath)
+        #os.remove(filepath)
         st.session_state.file_up_key= uuid.uuid4().hex
         st.markdown(st.session_state.extracted_text)
 
 extracted_text= st.session_state.extracted_text
+
 if query:
     full_query= f"{query}\n{extracted_text}"
     # Append the user's input to the chat history
@@ -169,7 +170,8 @@ if query:
     exec_time=time.time() - start_time
     # Append the bot's response to the chat history
     st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
-    
+    st.session_state.extracted_text= ""
+
     # Display the conversation
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

@@ -98,7 +98,11 @@ pdf_prompt_instruct= """Tu es Un assistant AI super helpful. Étant donné un co
 1- Extraire toutes les descriptions des produits qui se trouvent à l'intérieur du contexte.
 2- Reformuler, si besoin, les descriptions en étant le plus fidèle possible à la description originale.
 3- NE JAMAIS GÉNÉRER de réponse de ta part si le contexte est vide ou s'il n'y a pas assez d'informations.
-4- Mettre chaque description sur une ligne.
+4- Pour chaque produit identifie et structure les informations suivantes si et seulement si elles existent :
+        - **Part Number** : [la référence du produit]
+        - **Marque** : [la marque du produit]
+        - **Catégorie** : [la catégorie du produit]
+        - **Description** : [la description du produit]
 5- NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION JUST DROP THE TEXT.
 
 {contexte}
