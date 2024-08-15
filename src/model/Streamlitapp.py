@@ -15,21 +15,30 @@ embedding_function = load_embedding_function()
 
 # Initialiser le modèle LLM
 GROQ_TOKEN = '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'
-llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
-llm2 =ChatGroq(model_name="llama3-70b-8192",api_key=GROQ_TOKEN,temperature=0)
+@st.cache_resource
+def llm_generation(modelName,apiKey):         
+    llm = ChatGroq(model_name=modelName, api_key=apiKey, temperature=0)
+    return llm 
+
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
 api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
 collection_name="lenovoHP_collection"
-FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx']
-
-
+FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG']
+modelName2='gemma2-9b-it'
+modelName="llama-3.1-70b-versatile"
+llm = llm_generation(modelName,GROQ_TOKEN)
+llm2= llm_generation(modelName2,GROQ_TOKEN)
 pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
     1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. \
     2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
     3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
-    4- Dans chaque ligne donne moi le produit et ses caracteristique \
+    4- Pour chaque produit, s'il est disponible, identifie et structure les informations suivantes sur des lignes distinctes :
+        - **Part Number** : [la référence du produit]
+        - **Marque** : [la marque du produit]
+        - **Catégorie** : [la catégorie du produit]
+        - **Description** : [la description du produit]
     5-repond avec la meme langue du text dans le context\
-    6- Ne donne pas de commentaire de ta part ni de phrase introductive pour le resultat.\
+    6-NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION, JUSTE LES INFORMATIONS SUIVANTES.\
 
 {contexte}
 ------------
@@ -120,11 +129,7 @@ prompt = ChatPromptTemplate.from_messages(
         ]
     )
     
-# Interface Streamlit
-st.set_page_config(
-    page_title="EquotIA",
-    page_icon="🧠",
-)
+
 st.title("🧠 Sales Smart Assistant DGF")
 # Initialiser la session_state pour stocker l'historique des messages
 if 'messages' not in st.session_state:

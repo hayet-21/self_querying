@@ -8,6 +8,7 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.messages import HumanMessage
 from IPython.display import Markdown, HTML # display answer
 import pymupdf, pymupdf4llm, pytesseract as ocr
+from langchain_core.output_parsers import StrOutputParser # parser
 
 # Constants
 API_TOKEN = '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'
@@ -44,7 +45,7 @@ pdf_prompt_instruct= """Tu es Un assistant AI super helpful. Etant donnee un con
 2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
 3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
 4- Mettre chaque description sur une ligne. \
-5- Retourner La reponse brute sans commentaire de ta part.
+5- la reponse sera l'entree pour un autre llm qui va chercher c'est produits , demande lui de trouver les produits qui corresponts aux descriptions dans le pdf
 
 {contexte}
 ------------
@@ -83,3 +84,5 @@ def extract_text_from_file(filepath):
 def parse_file(filepath, parser= pdf_chain):
         text= extract_text_from_file(filepath)
         return parser.invoke(text)
+
+print(ocr)
