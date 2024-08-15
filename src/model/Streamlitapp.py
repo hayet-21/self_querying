@@ -9,9 +9,12 @@ import pymupdf, pymupdf4llm
 import pytesseract 
 from langchain_core.prompts import PromptTemplate
 import os
+import uuid
+
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 # Charger la fonction d'embedding
 embedding_function = load_embedding_function()
+file_up_key= uuid.uuid4().hex
 
 # Initialiser le modèle LLM
 GROQ_TOKEN = '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'
@@ -32,11 +35,7 @@ pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un
     1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. \
     2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
     3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
-    4- Pour chaque produit, s'il est disponible, identifie et structure les informations suivantes sur des lignes distinctes :
-        - **Part Number** : [la référence du produit]
-        - **Marque** : [la marque du produit]
-        - **Catégorie** : [la catégorie du produit]
-        - **Description** : [la description du produit]
+    4-met chaque produit dans une ligne 
     5-repond avec la meme langue du text dans le context\
     6-NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION, JUSTE LES INFORMATIONS SUIVANTES.\
 
@@ -109,7 +108,7 @@ prompt = ChatPromptTemplate.from_messages(
                 'system',
                 """
                 Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
-                Répond seulement si tu as la réponse. Affiche les produits un par un sous forme de tableau qui contient ces colonne Référence,Categorie, Marque, Description.
+                Répond seulement si tu as la réponse. affiche les produit un par un, pour chaque produit affiche son nom puis juste en dessous tableau qui contient ces colonne Référence,Categorie, Marque, Description.        
                 Il faut savoir que laptop, ordinateur, ordinateurs portable , pc et poste de travail ont tous le même sens.
                 Il faut savoir que téléphone portable et smartphone ont le même sens.
                 Il faut savoir que tout autre caractéristique du produit tel que la RAM stockage font partie de la description du produit et il faut filtrer selon la marque et la catégorie seulement.
@@ -131,27 +130,33 @@ prompt = ChatPromptTemplate.from_messages(
     
 
 st.title("🧠 Sales Smart Assistant DGF")
-# Initialiser la session_state pour stocker l'historique des messages
 if 'messages' not in st.session_state:
     st.session_state.messages = []
-  
-query= st.chat_input('comment puis-je vous aidez?')
-uploaded_file = st.file_uploader("Téléchargez un fichier PDF contenant des produits", type=FILE_TYPES)
 
-if uploaded_file or query:
-    full_query = query
+if "extracted_text" not in st.session_state:
+    print('im in ext text')
+    st.session_state.extracted_text =" "
+if "file_up_key" not in st.session_state:
+    print('im in filu up key')
+    st.session_state.file_up_key= uuid.uuid4().hex
+query= st.chat_input('comment puis-je vous aidez?')
+with st.sidebar:
+    uploaded_file =  st.file_uploader("Téléchargez un fichier contenant les produits que vous chercher", type=FILE_TYPES, key=st.session_state.file_up_key)
     if uploaded_file:
-         # Save the uploaded file temporarily
-        temp_file_path = f"./temp_{uploaded_file.name}"
-        with open(temp_file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        extracted_text=''
-        extracted_text = parse_file(temp_file_path)
-        full_query = f"Trouves ces produits  : \n{extracted_text}"
-        st.markdown(extracted_text)
-        #os.remove(temp_file_path)
-    else:
-        full_query = query
+        filepath= uploaded_file.name
+        data= uploaded_file.read()
+        uploaded_file.close()
+        uploaded_file= None
+        with open(filepath, 'wb') as up_file:
+            up_file.write(data)
+        st.session_state.extracted_text = parse_file(filepath)
+        os.remove(filepath)
+        st.session_state.file_up_key= uuid.uuid4().hex
+        st.markdown(st.session_state.extracted_text)
+
+extracted_text= st.session_state.extracted_text
+if query:
+    full_query= f"{query}\n{extracted_text}"
     # Append the user's input to the chat history
     st.session_state.messages.append({"role": "user", "content": full_query})
 
