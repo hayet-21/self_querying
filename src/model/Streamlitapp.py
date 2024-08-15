@@ -11,7 +11,7 @@ from langchain_core.prompts import PromptTemplate
 import os
 import uuid
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
 # Charger la fonction d'embedding
 embedding_function = load_embedding_function()
 file_up_key= uuid.uuid4().hex
