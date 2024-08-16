@@ -63,7 +63,7 @@ def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_d
     )
     return retriever
 
-async def query_bot(retriever, embedding_function, question,prompt):
+async def query_bot(retriever,question,prompt):
     context = retriever.invoke(question)
     if not context:
         return "Je n'ai pas trouvé de produits correspondants."
