@@ -165,7 +165,7 @@ if query:
    
     start_time =time.time()
     # Get the bot's response
-    result= asyncio.run(query_bot(retriever, embedding_function, full_query,prompt))
+    result= asyncio.run(query_bot(retriever, full_query,prompt))
     #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
     exec_time=time.time() - start_time
     # Append the bot's response to the chat history

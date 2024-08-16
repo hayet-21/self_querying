@@ -59,7 +59,7 @@ def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_d
         document_content_description,
         metadata_field_info,
         verbose=True,
-        search_kwargs={'k': 50}
+        search_kwargs={'k': 30}
     )
     return retriever
 
@@ -68,20 +68,20 @@ async def query_bot(retriever, embedding_function, question,prompt):
     if not context:
         return "Je n'ai pas trouvé de produits correspondants."
 
-    query_embedding = embedding_function.embed_query(question)
-    doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
-    similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
+    #query_embedding = embedding_function.embed_query(question)
+    #doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
+    #similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
 
-    filtered_docs = [
-        doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
-    ]
+    #filtered_docs = [
+    #    doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
+    #]
     document_chain = create_stuff_documents_chain(llm, prompt)
               
     # Charger l'historique des conversations
     conversation_history = memory.load_memory_variables({})
     result = document_chain.invoke(
             {
-                "context": filtered_docs,
+                "context": context,
                 "historique":conversation_history['history'],
                 "question": question  # Utiliser 'question' au lieu de 'messages'
             },
