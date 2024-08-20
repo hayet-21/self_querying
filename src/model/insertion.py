@@ -5,7 +5,7 @@ from langchain_qdrant import QdrantVectorStore as qd
 from langchain.document_loaders import CSVLoader
 from qdrant_client.models import Distance, VectorParams
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key='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')
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
 COLLECTION_NAME = "OpenAI_SELFQ_collection"
 QDRANT_URL="https://31c7da1f-d357-4163-9da5-51008923630d.us-east4-0.gcp.cloud.qdrant.io:6333"
 API_KEY ="aWrMYkukRIX9UdHZqhxWsWGuWM9RstNh1temmPB3OFt0inPCrf3vQw"
