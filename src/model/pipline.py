@@ -17,38 +17,32 @@ import pymupdf4llm , pymupdf,pytesseract as ocr
 from langchain_core.output_parsers import StrOutputParser # parser
 from langchain_core.prompts import PromptTemplate
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.llms import OpenAI
+from langchain_openai import ChatOpenAI
 
-
-#trouve les PC HP intel core i7
 # Charger les variables d'environnement
 load_dotenv()
-
+openAi8key = "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"
+modelName = "gpt-4o-mini"
 # Récupérer les clés API et chemins nécessaires
 HF_TOKEN = os.getenv('API_TOKEN')
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
 #llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
-llm = OpenAI(model_name="gpt-4o-mini")
+llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0)
 FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
-openAi8key= "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"
+modelName2='gemma2-9b-it'
+
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 memory = ConversationBufferMemory()
-def load_embedding_function():
-    embeddings = OpenAIEmbeddings(
-    model="text-large",
-    openai_api_key=openAi8key,
-    )
-    return embeddings
-
-def initialize_vectorstore(embedding_function, QDRANT_URL, QDRANT_API_KEY, collection_name):
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key='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')
+def initialize_vectorstore(embeddings, QDRANT_URL, QDRANT_API_KEY, collection_name):
     qdrantClient = qdrant_client.QdrantClient(
         url=QDRANT_URL,
         prefer_grpc=True,
         api_key=QDRANT_API_KEY)
-    return Qdrant(qdrantClient, collection_name, embedding_function) #, vector_name='vector_params'
+    return Qdrant(qdrantClient, collection_name, embeddings) #, vector_name='vector_params'
 
 
 def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_description):
@@ -109,8 +103,12 @@ pdf_prompt_instruct= """Tu es Un assistant AI super helpful. Étant donné un co
 Réponse: trouve les produits qui correspondent à ces descriptions :
 """
 
-pdf_prompt= PromptTemplate.from_template(pdf_prompt_instruct)
-pdf_chain = pdf_prompt | llm | StrOutputParser()
+def llm_generation(modelName, GROQ_TOKEN):         
+    llm = ChatGroq(model_name=modelName, api_key=GROQ_TOKEN, temperature=0)
+    return llm
+llm2= llm_generation(modelName2,GROQ_TOKEN)
+pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
+pdf_chain=  pdf_prompt | llm2
 def extract_text_from_img(img):
         text= ocr.image_to_string(img)
         return text

@@ -1,5 +1,5 @@
 import streamlit as st
-from pipline import load_embedding_function, initialize_vectorstore, initialize_retriever, query_bot
+from pipline import  initialize_vectorstore, initialize_retriever, query_bot
 from langchain_groq import ChatGroq
 import asyncio
 import time
@@ -11,27 +11,34 @@ from langchain_core.prompts import PromptTemplate
 import os
 import uuid
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.llms import OpenAI
+from langchain_openai import ChatOpenAI
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key='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')
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 # Charger la fonction d'embedding
-embedding_function = load_embedding_function()
+#os.getenv(openAi8key)
 file_up_key= uuid.uuid4().hex
-openAi8key= "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"
-# Initialiser le modèle LLM
-GROQ_TOKEN = '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'
-@st.cache_resource
-def llm_generation(modelName,apiKey):         
-    llm = ChatGroq(model_name=modelName, api_key=apiKey, temperature=0)
-    return llm 
+# Set your OpenAI API key
+openAi8key = "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"
 
-url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
-api_key= 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
-collection_name="lenovoHP_collection"
+# Initialize the chat model
+modelName = "gpt-4o-mini"
+llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0)
+# Initialiser le modèle LLM
+GROQ_TOKEN = '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'
+@st.cache_resource
+def llm_generation(modelName, GROQ_TOKEN):         
+    llm = ChatGroq(model_name=modelName, api_key=GROQ_TOKEN, temperature=0)
+    return llm
+
+
+url="https://31c7da1f-d357-4163-9da5-51008923630d.us-east4-0.gcp.cloud.qdrant.io:6333"
+api_key= "aWrMYkukRIX9UdHZqhxWsWGuWM9RstNh1temmPB3OFt0inPCrf3vQw"
+collection_name="OpenAI_SELFQ_collection"
 FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG']
-#modelName2='gemma2-9b-it'
-#modelName="llama-3.1-70b-versatile"
-llm = OpenAI(model_name="gpt-4o-mini")
-#llm2= llm_generation(modelName2,GROQ_TOKEN)
+modelName2='gemma2-9b-it'
+modelName = "gpt-4o-mini"
+llm2= llm_generation(modelName2,GROQ_TOKEN)
 pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
     1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. \
     2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
@@ -45,7 +52,7 @@ pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un
 Réponse :"""
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
-pdf_chain=  pdf_prompt | llm
+pdf_chain=  pdf_prompt | llm2
 
 def extract_text_from_img(img):
     text = pytesseract.image_to_string(img)
@@ -100,7 +107,8 @@ metadata_field_info = [
         }
     ]
 # Initialiser le vectorstore et le retriever
-vectorstore = initialize_vectorstore(embedding_function,url,api_key,collection_name)
+
+vectorstore = initialize_vectorstore(embeddings,url,api_key,collection_name)
 retriever = initialize_retriever(llm, vectorstore,metadata_field_info,document_content_description)
 # Construire le template de prompt
 prompt = ChatPromptTemplate.from_messages(
