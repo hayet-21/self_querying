@@ -225,7 +225,7 @@ with st.sidebar:
 extracted_text = st.session_state.extracted_text
 
 if query:
-    full_query = f"{query}\n{extracted_text}"
+    s
     st.session_state.messages.append({"role": "user", "content": full_query})
 
     start_time = time.time()

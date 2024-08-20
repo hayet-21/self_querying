@@ -15,6 +15,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import Qdrant
 import qdrant_client
+import tiktoken
+import json
 from langchain_core.prompts import PromptTemplate
 # Configuration de Tesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -29,7 +31,7 @@ FILE_TYPES = ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx', 'PNG']
 modelName2='gemma2-9b-it'
 modelName="llama-3.1-70b-versatile"
 # Initialiser le modèle LLM
-GROQ_TOKEN = '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'
+GROQ_TOKEN = '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'
 
 @st.cache_resource
 def llm_generation(modelName, GROQ_TOKEN):         
@@ -117,7 +119,16 @@ def parse_file(filepath, parser=pdf_chain):
     text = extract_text_from_file(filepath)
     result = parser.invoke(text)
     return result.content
-
+def count_tokens(context):
+    encoding = tiktoken.get_encoding("cl100k_base")
+    # Convert the context to a string if it's not already a string
+    if not isinstance(context, str):
+        if isinstance(context, dict) or isinstance(context, list):
+            context = json.dumps(context)
+        else:
+            context = str(context)
+    tokens = encoding.encode(context)
+    return len(tokens)
 document_content_description = "Informations sur le produit, incluant la référence et la description."
 metadata_field_info = [
     {'name': "Marque", 'description': "La Marque du produit.", 'type': "string"},
@@ -158,7 +169,8 @@ async def query_bot(retriever, embedding_function, question, prompt):
     context=[]
     print(context)
     context = retriever.invoke(question)
-    print("Contexte actuel:", context)
+    input_tokens = count_tokens(context)
+    print("context tokens:",input_tokens)
     if not context:
         return "Je n'ai pas trouvé de produits correspondants."
 
@@ -169,7 +181,8 @@ async def query_bot(retriever, embedding_function, question, prompt):
         "historique": conversation_history['history'],
         "question": question
     })
-    print("Réponse générée:", result)
+    output_tokens = count_tokens(result)
+    print("context tokens:",output_tokens)
     memory.save_context({"question": question}, {"response": result})
     return result
 
