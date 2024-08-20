@@ -16,6 +16,8 @@ from langchain_community.document_loaders import Docx2txtLoader
 import pymupdf4llm , pymupdf,pytesseract as ocr
 from langchain_core.output_parsers import StrOutputParser # parser
 from langchain_core.prompts import PromptTemplate
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.llms import OpenAI
 
 
 #trouve les PC HP intel core i7
@@ -27,22 +29,19 @@ HF_TOKEN = os.getenv('API_TOKEN')
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
-llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+#llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+llm = OpenAI(model_name="gpt-4o-mini")
 FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
-
+openAi8key= "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"
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 memory = ConversationBufferMemory()
 def load_embedding_function():
-    try:
-        embedding_function = HuggingFaceInferenceAPIEmbeddings(
-            api_key=HF_TOKEN,
-            model_name="intfloat/multilingual-e5-large"
-        )
-        return embedding_function
-    except Exception as e:
-        print(f"Error loading embedding function: {e}")
-        return None
+    embeddings = OpenAIEmbeddings(
+    model="text-large",
+    openai_api_key=openAi8key,
+    )
+    return embeddings
 
 def initialize_vectorstore(embedding_function, QDRANT_URL, QDRANT_API_KEY, collection_name):
     qdrantClient = qdrant_client.QdrantClient(

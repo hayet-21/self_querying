@@ -16,9 +16,8 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import Qdrant
 import qdrant_client
 from langchain_core.prompts import PromptTemplate
-
 # Configuration de Tesseract
-pytesseract.pytesseract.tesseract_cmd = r'C:\Users\Dell\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # Variables et constantes
 HF_TOKEN = os.getenv('API_TOKEN')
@@ -27,8 +26,8 @@ api_key = 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
 collection_name = "lenovoHP_collection"
 
 FILE_TYPES = ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx', 'PNG']
-modelName = "llama-3.1-70b-versatile"
-modelName2 = 'llama3-70b-8192'
+modelName2='gemma2-9b-it'
+modelName="llama-3.1-70b-versatile"
 # Initialiser le modèle LLM
 GROQ_TOKEN = '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'
 
@@ -57,7 +56,8 @@ pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
 
 # Initialize memory
 memory = ConversationBufferMemory()
-
+memory.clear()
+@st.cache_resource
 def load_embedding_function():
     try:
         embedding_function = HuggingFaceInferenceAPIEmbeddings(
@@ -80,12 +80,13 @@ def initialize_retriever(llm, vectorstore, metadata_field_info, document_content
         document_content_description,
         metadata_field_info,
         verbose=True,
-        search_kwargs={'k': 50}
+        search_kwargs={'k': 30}
     )
     return retriever
 
 def extract_text_from_img(img):
-    return pytesseract.image_to_string(img)
+        text= pytesseract.image_to_string(img)
+        return text
 
 def extract_text_from_pdf(pdf):
     file = pymupdf.open(pdf)
@@ -99,7 +100,7 @@ def extract_text_from_pdf(pdf):
 
 def extract_text_from_docx_xlsx(docx):
     return pymupdf4llm.to_markdown(docx)
-
+@st.cache_data
 def extract_text_from_file(file):
     _, ext = os.path.splitext(file)
     ext = ext.strip('.')
@@ -133,7 +134,7 @@ prompt = ChatPromptTemplate.from_messages(
                 'system',
                 """
                 Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
-                Répond seulement si tu as la réponse. affiche les produit un par un, pour chaque produit affiche son nom puis juste en dessous un tableau qui contient ces colonne Référence,Categorie, Marque, Description.        
+                affiche les produit un par un, pour chaque produit affiche son nom puis juste en dessous un tableau qui contient ces colonne Référence,Categorie, Marque, Description.        
                 Il faut savoir que laptop, ordinateur, ordinateurs portable , pc et poste de travail ont tous le même sens.
                 Il faut savoir que téléphone portable et smartphone ont le même sens.
                 Il faut savoir que tout autre caractéristique du produit tel que la RAM stockage font partie de la description du produit et il faut filtrer selon la marque et la catégorie seulement.
@@ -141,7 +142,7 @@ prompt = ChatPromptTemplate.from_messages(
                 lorsque une question de similarite entre des produits est poser, il faut dabord commencer par les produit qui ont des processeur qui se ressemble le plus, puis la memoire ram , puis le stockage, puis les autres caracteristique
                 la question peut contenir  plusieurs produits avec differentes descriptions, il faut chercher sur les differents produits demandé .
                 si je te pose une question sur les question ou les reponses fournient precedement tu doit me repondre selon l'historique.
-                tu ne doit pas oublier l'historique car parfois le user continue a te poser des question sur tes reponses que tas deja fourni aupatavant
+                tu ne doit pas oublier l'historique de la session car parfois le user continue a te poser des question sur tes reponses que tas deja fourni auparavant
 
                 Contexte: {context}
                 historique :{historique}
@@ -154,22 +155,21 @@ prompt = ChatPromptTemplate.from_messages(
     )
     
 async def query_bot(retriever, embedding_function, question, prompt):
+    context=[]
+    print(context)
     context = retriever.invoke(question)
+    print("Contexte actuel:", context)
     if not context:
         return "Je n'ai pas trouvé de produits correspondants."
-
-    query_embedding = embedding_function.embed_query(question)
-    doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
-    similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
-    filtered_docs = [doc for doc, similarity in zip(context, similarities) if similarity >= 0.7]
 
     document_chain = create_stuff_documents_chain(llm, prompt)
     conversation_history = memory.load_memory_variables({})
     result = document_chain.invoke({
-        "context": filtered_docs,
+        "context": context,
         "historique": conversation_history['history'],
         "question": question
     })
+    print("Réponse générée:", result)
     memory.save_context({"question": question}, {"response": result})
     return result
 
@@ -194,7 +194,7 @@ with st.sidebar:
         with open(filepath, 'wb') as up_file:
             up_file.write(data)
         st.session_state.extracted_text = parse_file(filepath)
-        os.remove(filepath)
+        #os.remove(filepath)
         st.session_state.file_up_key = uuid.uuid4().hex
         st.markdown(st.session_state.extracted_text)
 
@@ -214,3 +214,4 @@ if query:
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
