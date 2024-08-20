@@ -25,7 +25,7 @@ def num_tokens_from_string(string: str) -> int:
     return num_tokens
 
 # Initialiser le modèle LLM
-GROQ_TOKEN = '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'
+GROQ_TOKEN = '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'
 @st.cache_resource
 def llm_generation(modelName,apiKey):         
     llm = ChatGroq(model_name=modelName, api_key=apiKey, temperature=0)

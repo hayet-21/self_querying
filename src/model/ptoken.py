@@ -26,7 +26,7 @@ load_dotenv()
 HF_TOKEN = os.getenv('API_TOKEN')
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
-GROQ_TOKEN = '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'
+GROQ_TOKEN = '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'
 llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
 FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
 
@@ -71,22 +71,33 @@ def num_tokens_from_string(string: str) -> int:
     num_tokens = len(encoding.encode(string))
     return num_tokens
 
-def docs_transformtion(docs):
-    all_results=[]
-    for doc in docs:
-        c=doc.metadata.get('Categorie', '')
-        m= doc.metadata.get('Marque', '')
-        page=doc.page_content
-        result = f"{c} {m} {page}"
-        # Ajouter le résultat à la liste
+def docs_to_string(documents):
+    all_results = []
+    
+    for doc in documents:
+        # Récupérer toutes les métadonnées
+        metadata = doc.metadata
+        
+        # Construire une chaîne avec toutes les métadonnées
+        metadata_str = "\n".join([f"{key}: {value}" for key, value in metadata.items()])
+        
+        # Récupérer le contenu de la page
+        page_content = doc.page_content
+        
+        # Construire le texte final pour chaque document
+        result = f"{metadata_str}\n\nContenu de la page:\n{page_content}"
+        
+        # Ajouter le texte à la liste des résultats
         all_results.append(result)
-    doc_txt="\n\n".join(all_results)
+    
+    # Joindre tous les résultats avec deux sauts de ligne entre eux
+    doc_txt = "\n\n".join(all_results)
+    
     return doc_txt
-
 async def query_bot(retriever,question,prompt):
-    docs = retriever.invoke(question)
-    context=docs_transformtion(docs)
-    print('nombre de token du context : ',num_tokens_from_string(context))
+    context= retriever.invoke(question)
+    r=docs_to_string(context)
+    print('nombre de token du context : ',num_tokens_from_string(r))
     if not context:
         return "Je n'ai pas trouvé de produits correspondants."
 
