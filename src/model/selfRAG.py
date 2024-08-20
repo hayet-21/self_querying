@@ -1,5 +1,5 @@
 import streamlit as st
-from p import load_embedding_function, initialize_vectorstore, initialize_retriever, query_bot
+from pipelineSelfrag import load_embedding_function, initialize_vectorstore, initialize_retriever, query_bot
 from langchain_groq import ChatGroq
 import asyncio
 import time
