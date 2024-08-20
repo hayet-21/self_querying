@@ -12,18 +12,19 @@ import os
 import uuid
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key='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')
+load_dotenv()
+openAi8key=os.getenv('openAi8key')
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 # Charger la fonction d'embedding
 #os.getenv(openAi8key)
 file_up_key= uuid.uuid4().hex
 # Set your OpenAI API key
-openAi8key = "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"
-
 # Initialize the chat model
 modelName = "gpt-4o-mini"
-llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0)
+llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0)
 # Initialiser le modèle LLM
 GROQ_TOKEN = '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'
 @st.cache_resource

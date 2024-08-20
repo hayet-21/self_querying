@@ -21,10 +21,10 @@ from langchain_openai import ChatOpenAI
 
 # Charger les variables d'environnement
 load_dotenv()
-openAi8key = "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"
 modelName = "gpt-4o-mini"
 # Récupérer les clés API et chemins nécessaires
 HF_TOKEN = os.getenv('API_TOKEN')
+openAi8key=os.getenv('openAi8key')
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
