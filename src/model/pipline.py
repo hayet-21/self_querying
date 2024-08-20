@@ -36,7 +36,7 @@ modelName2='gemma2-9b-it'
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 memory = ConversationBufferMemory()
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key='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')
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
 def initialize_vectorstore(embeddings, QDRANT_URL, QDRANT_API_KEY, collection_name):
     qdrantClient = qdrant_client.QdrantClient(
         url=QDRANT_URL,
