@@ -45,7 +45,7 @@ pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un
 Réponse :"""
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
-pdf_chain=  pdf_prompt | llm2
+pdf_chain=  pdf_prompt | llm
 
 def extract_text_from_img(img):
     text = pytesseract.image_to_string(img)
