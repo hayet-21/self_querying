@@ -13,15 +13,14 @@ import uuid
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 load_dotenv()
-openAi8key=os.getenv('openAi8key')
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-# Charger la fonction d'embedding
-#os.getenv(openAi8key)
-file_up_key= uuid.uuid4().hex
 # Set your OpenAI API key
+openAi8key=os.getenv('openAi8key')
+# Charger la fonction d'embedding
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
+file_up_key= uuid.uuid4().hex
 # Initialize the chat model
 modelName = "gpt-4o-mini"
 llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)

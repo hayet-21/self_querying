@@ -21,7 +21,6 @@ from langchain_openai import ChatOpenAI
 
 # Charger les variables d'environnement
 load_dotenv()
-modelName = "gpt-4o-mini"
 # Récupérer les clés API et chemins nécessaires
 HF_TOKEN = os.getenv('API_TOKEN')
 openAi8key=os.getenv('openAi8key')
@@ -29,10 +28,10 @@ CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
 #llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+modelName = "gpt-4o-mini"
 llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0)
 FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
 modelName2='gemma2-9b-it'
-print(openAi8key)
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 memory = ConversationBufferMemory()
