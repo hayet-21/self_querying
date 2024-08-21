@@ -24,7 +24,7 @@ file_up_key= uuid.uuid4().hex
 # Set your OpenAI API key
 # Initialize the chat model
 modelName = "gpt-4o-mini"
-llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0)
+llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)
 # Initialiser le modèle LLM
 GROQ_TOKEN = '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'
 @st.cache_resource

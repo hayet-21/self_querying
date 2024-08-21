@@ -32,7 +32,7 @@ GROQ_TOKEN = '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'
 llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0)
 FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
 modelName2='gemma2-9b-it'
-
+print(openAi8key)
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 memory = ConversationBufferMemory()
@@ -52,7 +52,7 @@ def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_d
         document_content_description,
         metadata_field_info,
         verbose=True,
-        search_kwargs={'k': 30}
+        search_kwargs={'k': 20}
     )
     return retriever
 
