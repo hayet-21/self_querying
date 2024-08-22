@@ -29,7 +29,7 @@ COLLECTION_CSV = os.getenv('COLLECTION_CSV')
 GROQ_TOKEN = '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'
 #llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
 modelName = "gpt-4o-mini"
-llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0)
+llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0.3)
 FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
 modelName2='gemma2-9b-it'
 #llama3-8b-8192
@@ -51,7 +51,8 @@ def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_d
         document_content_description,
         metadata_field_info,
         verbose=True,
-        search_kwargs={'k': 20}
+        search_kwargs={'k': 50},
+        search_type='mmr'
     )
     return retriever
 

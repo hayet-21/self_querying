@@ -32,8 +32,8 @@ def llm_generation(modelName, GROQ_TOKEN):
     return llm
 
 
-url="https://31c7da1f-d357-4163-9da5-51008923630d.us-east4-0.gcp.cloud.qdrant.io:6333"
-api_key= "aWrMYkukRIX9UdHZqhxWsWGuWM9RstNh1temmPB3OFt0inPCrf3vQw"
+url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io"
+api_key= "lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA"
 collection_name="OpenAI_SELFQ_collection"
 FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG']
 modelName2='gemma2-9b-it'
