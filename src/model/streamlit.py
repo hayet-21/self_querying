@@ -42,17 +42,15 @@ llm = llm_generation(modelName, GROQ_TOKEN)
 llm2 = llm_generation(modelName2, GROQ_TOKEN)
 
 # Prompt pour extraction de texte depuis PDF
-pdf_prompt_instruct = """ Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: 
-    1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. 
-    2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. 
-    3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. 
-    4- Surtout met chaque produit sur une ligne distincte des autre produits.
-    5- repond avec la meme langue du text dans le context
-    6- donne moi ta reponse directement sans introduction ou des phrase de ta part.
-
-{contexte}
-------------
-Réponse :"""
+pdf_prompt_instruct =  """Tu es un **Assistant Extraction de Descriptions :**
+    1. **Extraction** : Identifie toutes les descriptions de produits dans le contexte.
+    2. **Reformulation** : Si nécessaire, reformule les descriptions tout en restant fidèle à l'original.
+    3. **Contexte Vide** : Ne génère aucune réponse si le contexte est vide ou insuffisant.
+    4. **Format** : un produit decrit par ligne et une ligne suffit un produit, numérotée.
+    5. **Réponse Brute** : Retourne uniquement les descriptions sans commentaire.
+    6. **Nombre**: N'oublie aucun produit.
+    {contexte}
+    Reponse:"""
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
 
@@ -119,16 +117,7 @@ def parse_file(filepath, parser=pdf_chain):
     text = extract_text_from_file(filepath)
     result = parser.invoke(text)
     return result.content
-def count_tokens(context):
-    encoding = tiktoken.get_encoding("cl100k_base")
-    # Convert the context to a string if it's not already a string
-    if not isinstance(context, str):
-        if isinstance(context, dict) or isinstance(context, list):
-            context = json.dumps(context)
-        else:
-            context = str(context)
-    tokens = encoding.encode(context)
-    return len(tokens)
+
 document_content_description = "Informations sur le produit, incluant la référence et la description."
 metadata_field_info = [
     {'name': "Marque", 'description': "La Marque du produit.", 'type': "string"},
@@ -165,26 +154,35 @@ prompt = ChatPromptTemplate.from_messages(
         ]
     )
     
-async def query_bot(retriever, embedding_function, question, prompt):
-    context=[]
-    print(context)
-    context = retriever.invoke(question)
-    input_tokens = count_tokens(context)
-    print("context tokens:",input_tokens)
-    if not context:
-        return "Je n'ai pas trouvé de produits correspondants."
+async def batch_query_bot(retriever, queries, prompt):
+    # Initialize an empty list to hold the results
+    results = []
+    for query in queries:
+        st.markdown(query)
+        # Retrieve context based on the current query
+        context = retriever.invoke(query)
+        if not context:
+            results.append("Je n'ai pas trouvé de produits correspondants.")
+            continue
 
-    document_chain = create_stuff_documents_chain(llm, prompt)
-    conversation_history = memory.load_memory_variables({})
-    result = document_chain.invoke({
-        "context": context,
-        "historique": conversation_history['history'],
-        "question": question
-    })
-    output_tokens = count_tokens(result)
-    print("context tokens:",output_tokens)
-    memory.save_context({"question": question}, {"response": result})
-    return result
+        document_chain = create_stuff_documents_chain(llm, prompt)
+        
+        # Load conversation history
+        conversation_history = memory.load_memory_variables({})
+        result = document_chain.invoke(
+            {
+                "context": context,
+                "historique": conversation_history['history'],
+                "question": query
+            },
+        )
+        # Save the context and append the result
+        memory.save_context({"question": query}, {"response": result})
+        results.append(result)
+
+    # Return all results as a single response or in a list
+    return results
+
 
 st.title("🧠 Sales Smart Assistant DGF")
 if 'messages' not in st.session_state:
@@ -214,14 +212,19 @@ with st.sidebar:
 extracted_text = st.session_state.extracted_text
 
 if query:
-    full_query = f"{query}\n{extracted_text}"
-    st.session_state.messages.append({"role": "user", "content": full_query})
-
+    queries = extracted_text.strip('\n').split('\n')
+    # Add the initial user query to the first product
+    queries[0] = f"{query}\n{queries[0]}".strip('\n')
+    # Run the batch query bot function
     start_time = time.time()
-    result = asyncio.run(query_bot(retriever, embedding_function, full_query, prompt))
+    results = asyncio.run(batch_query_bot(retriever, queries, prompt))
     exec_time = time.time() - start_time
 
-    st.session_state.messages.append({"role": "ai", "content": f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+    # Display the results
+    for result in results:
+        st.session_state.messages.append({"role": "ai", "content": f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+
+    # Clear the extracted text after processing
     st.session_state.extracted_text = ""
 
     for message in st.session_state.messages:
