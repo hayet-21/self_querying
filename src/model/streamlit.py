@@ -13,7 +13,7 @@ import uuid
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
-
+import extract_msg
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 load_dotenv()
@@ -33,7 +33,7 @@ def llm_generation(modelName, GROQ_TOKEN):
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io"
 api_key= "lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA"
 collection_name="OpenAI_SELFQ_collection"
-FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG']
+FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG','msg']
 modelName2='gemma2-9b-it'
 modelName = "gpt-4o-mini"
 # Initialiser le modèle d'extraction
@@ -87,13 +87,55 @@ def extract_text_from_file(file):
             return extract_text_from_docx_xlsx(file)
     if ext == 'pdf':
             return extract_text_from_pdf(file)
+    if ext == 'msg':
+        temp_dir = os.path.join('temp_attachments', uuid.uuid4().hex)
+        os.makedirs(temp_dir, exist_ok=True)
+        msg_text = extract_text_and_attachments_from_msg(file, temp_dir)
+        # Nettoyer les fichiers temporaires
+        for root, dirs, files in os.walk(temp_dir):
+            for name in files:
+                os.remove(os.path.join(root, name))
+        os.rmdir(temp_dir)
+        return msg_text
     return extract_text_from_img(file)
                         
+def extract_text_and_attachments_from_msg(path, temp_dir):
+    msg = extract_msg.Message(path)
+    # Extraire le corps du message
+    msg_message = "le contenu de l'email est : \n\n " + msg.body
+    
+    # Extraire les pièces jointes
+    if msg.attachments:
+        for attachment in msg.attachments:
+            attachment_name = attachment.longFilename or attachment.shortFilename
+            if not attachment_name:
+                continue
+            attachment_path = os.path.join(temp_dir, attachment_name)
+            with open(attachment_path, 'wb') as f:
+                f.write(attachment.data)
+            
+            _, ext = os.path.splitext(attachment_name)
+            ext = ext.strip('.')
+            assert ext in FILE_TYPES, f'wrong file type. The file must be one of the following {FILE_TYPES}'
 
+            if ext in ['docx', 'xlsx']:
+                attachment_text = extract_text_from_docx_xlsx(attachment_path)
+            elif ext == 'pdf':
+                attachment_text = extract_text_from_pdf(attachment_path)
+            elif ext in ['jpg', 'jpeg', 'png', 'PNG']:
+                attachment_text = extract_text_from_img(attachment_path)
+            else:
+                attachment_text = 'Format de pièce jointe non supporté.'
+
+            msg_message += f"\n\n{attachment_text}"
+    
+    msg.close()
+    return msg_message
 def parse_file(filepath, parser=pdf_chain):
     text = extract_text_from_file(filepath)
     result=parser.invoke(text)
     return result.content
+
 
 document_content_description = "Informations sur le produit, incluant la référence et la description."
 metadata_field_info = [
