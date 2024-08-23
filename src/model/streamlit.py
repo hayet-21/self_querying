@@ -80,7 +80,8 @@ def initialize_retriever(llm, vectorstore, metadata_field_info, document_content
         document_content_description,
         metadata_field_info,
         verbose=True,
-        search_kwargs={'k': 30}
+        search_kwargs={'k': 200, 'fetch_k': 5},
+        search_type='mmr'
     )
     return retriever
 
@@ -153,36 +154,62 @@ prompt = ChatPromptTemplate.from_messages(
             ),
         ]
     )
-    
-async def batch_query_bot(retriever, queries, prompt):
-    # Initialize an empty list to hold the results
-    results = []
-    for query in queries:
-        st.markdown(query)
-        # Retrieve context based on the current query
-        context = retriever.invoke(query)
-        if not context:
-            results.append("Je n'ai pas trouvé de produits correspondants.")
-            continue
 
-        document_chain = create_stuff_documents_chain(llm, prompt)
-        
-        # Load conversation history
-        conversation_history = memory.load_memory_variables({})
-        result = document_chain.invoke(
+from json import dumps, loads
+from langchain.schema import Document
+from typing import List
+
+
+def get_unique_union(documents: List[List[Document]]) -> List[Document]:
+    """Unique union of retrieved documents based on their metadata and content."""
+    try:
+        # Aplatir la liste de listes de documents en une seule liste
+        flattened_docs = [(dumps(doc.metadata), doc.page_content) for sublist in documents for doc in sublist]
+        # Utiliser un set pour obtenir des documents uniques basés sur les métadonnées et le contenu
+        unique_docs = list(set(flattened_docs))
+        # Reconstituer les documents uniques
+        return [Document(metadata=loads(metadata), page_content=content) for metadata, content in unique_docs]
+    except (TypeError, ValueError) as e:
+        print(f"Erreur lors de la conversion des documents : {e}")
+        return []
+         
+async def batch_query_bot(retriever,questions: list[str] | str,prompt):
+    if not isinstance(questions, list):
+            questions= [questions]
+    context = retriever.batch(questions)
+    if not context:
+        return "Je n'ai pas trouvé de produits correspondants."
+
+    print(context)
+    print('length de context : ', sum(len(sublist) for sublist in context))
+    liste=get_unique_union(context)
+    print('la liste : ', liste)
+    print(f"Nombre total de liste : ", {len(liste)})
+
+
+    #query_embedding = embedding_function.embed_query(question)
+    #doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
+    #similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
+
+    #filtered_docs = [
+    #    doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
+    #]
+    document_chain = create_stuff_documents_chain(llm, prompt)
+              
+    # Charger l'historique des conversations
+    conversation_history = memory.load_memory_variables({})
+    result = document_chain.invoke(
             {
-                "context": context,
-                "historique": conversation_history['history'],
-                "question": query
+                "context": liste,
+                "historique":conversation_history['history'],
+                "question": questions  # Utiliser 'question' au lieu de 'messages'
             },
-        )
-        # Save the context and append the result
-        memory.save_context({"question": query}, {"response": result})
-        results.append(result)
+    )
+    # Save context
+    memory.save_context({"question": questions}, {"response": result})
+    
 
-    # Return all results as a single response or in a list
-    return results
-
+    return result
 
 st.title("🧠 Sales Smart Assistant DGF")
 if 'messages' not in st.session_state:
@@ -212,17 +239,17 @@ with st.sidebar:
 extracted_text = st.session_state.extracted_text
 
 if query:
+    full_query= f"{query}\n{extracted_text}"
+    st.session_state.messages.append({"role": "user", "content": full_query})
+
     queries = extracted_text.strip('\n').split('\n')
-    # Add the initial user query to the first product
-    queries[0] = f"{query}\n{queries[0]}".strip('\n')
+    print(queries)
+
     # Run the batch query bot function
     start_time = time.time()
-    results = asyncio.run(batch_query_bot(retriever, queries, prompt))
+    result = asyncio.run(batch_query_bot(retriever, queries, prompt))
     exec_time = time.time() - start_time
-
-    # Display the results
-    for result in results:
-        st.session_state.messages.append({"role": "ai", "content": f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+    st.session_state.messages.append({"role": "ai", "content": f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
 
     # Clear the extracted text after processing
     st.session_state.extracted_text = ""
