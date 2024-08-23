@@ -1,141 +1,125 @@
 import streamlit as st
+from pipline import  initialize_vectorstore, initialize_retriever ,query_bot,batch_query_bot
 from langchain_groq import ChatGroq
 import asyncio
 import time
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser # parser
+import pymupdf, pymupdf4llm
+import pytesseract 
+from langchain_core.prompts import PromptTemplate
 import os
 import uuid
-import pymupdf
-import pytesseract
-import pymupdf4llm
-from langchain.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.retrievers.self_query.base import SelfQueryRetriever
-from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
-from sklearn.metrics.pairwise import cosine_similarity
-from langchain.memory import ConversationBufferMemory
-from langchain_community.vectorstores import Qdrant
-import qdrant_client
-import tiktoken
-import json
-from langchain_core.prompts import PromptTemplate
-# Configuration de Tesseract
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
+from dotenv import load_dotenv
+
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-# Variables et constantes
-HF_TOKEN = os.getenv('API_TOKEN')
-url = "https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io:6333"
-api_key = 'lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA'
-collection_name = "lenovoHP_collection"
+load_dotenv()
+# Set your OpenAI API key
+openAi8key=os.getenv('openAi8key')
+# Charger la fonction d'embedding
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
+file_up_key= uuid.uuid4().hex
 
-FILE_TYPES = ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx', 'PNG']
-modelName2='gemma2-9b-it'
-modelName="llama-3.1-70b-versatile"
-# Initialiser le modèle LLM
-GROQ_TOKEN = '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'
-
+GROQ_TOKEN = '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'
 @st.cache_resource
 def llm_generation(modelName, GROQ_TOKEN):         
     llm = ChatGroq(model_name=modelName, api_key=GROQ_TOKEN, temperature=0)
     return llm
 
-llm = llm_generation(modelName, GROQ_TOKEN)
-llm2 = llm_generation(modelName2, GROQ_TOKEN)
 
-# Prompt pour extraction de texte depuis PDF
-pdf_prompt_instruct =  """Tu es un **Assistant Extraction de Descriptions :**
-    1. **Extraction** : Identifie toutes les descriptions de produits dans le contexte.
-    2. **Reformulation** : Si nécessaire, reformule les descriptions tout en restant fidèle à l'original.
-    3. **Contexte Vide** : Ne génère aucune réponse si le contexte est vide ou insuffisant.
-    4. **Format** : un produit decrit par ligne et une ligne suffit un produit, numérotée.
-    5. **Réponse Brute** : Retourne uniquement les descriptions sans commentaire.
-    6. **Nombre**: N'oublie aucun produit.
-    {contexte}
-    Reponse:"""
+url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io"
+api_key= "lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA"
+collection_name="OpenAI_SELFQ_collection"
+FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG']
+modelName2='gemma2-9b-it'
+modelName = "gpt-4o-mini"
+# Initialiser le modèle d'extraction
+llm2= llm_generation(modelName2,GROQ_TOKEN)
+# Initialize the chat model
+llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)
+
+pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
+    1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. \
+    2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
+    3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
+    4-met chaque produit dans une ligne 
+    5-repond avec la meme langue du text dans le context\
+    6-NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION, JUSTE LES INFORMATIONS SUIVANTES.\
+
+{contexte}
+------------
+Réponse :"""
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
-
-# Initialize memory
-memory = ConversationBufferMemory()
-memory.clear()
-@st.cache_resource
-def load_embedding_function():
-    try:
-        embedding_function = HuggingFaceInferenceAPIEmbeddings(
-            api_key=HF_TOKEN,
-            model_name="intfloat/multilingual-e5-large"
-        )
-        return embedding_function
-    except Exception as e:
-        print(f"Error loading embedding function: {e}")
-        return None
-
-def initialize_vectorstore(embedding_function, url, api_key, collection_name):
-    qdrantClient = qdrant_client.QdrantClient(url=url, prefer_grpc=True, api_key=api_key)
-    return Qdrant(qdrantClient, collection_name, embedding_function)
-
-def initialize_retriever(llm, vectorstore, metadata_field_info, document_content_description):
-    retriever = SelfQueryRetriever.from_llm(
-        llm,
-        vectorstore,
-        document_content_description,
-        metadata_field_info,
-        verbose=True,
-        search_kwargs={'k': 200, 'fetch_k': 5},
-        search_type='mmr'
-    )
-    return retriever
+pdf_chain=  pdf_prompt | llm2
 
 def extract_text_from_img(img):
-        text= pytesseract.image_to_string(img)
-        return text
-
-def extract_text_from_pdf(pdf):
-    file = pymupdf.open(pdf)
-    p = file[0].get_text()
-    if bool(p.strip()):
-        text = pymupdf4llm.to_markdown(pdf)
-    else:
-        text = ''.join(page.get_textpage_ocr().extractTEXT() + "\n\n" for page in file)
-    file.close()
+    text = pytesseract.image_to_string(img)
     return text
 
+def extract_text_from_pdf(pdf):
+        file= pymupdf.open(pdf)
+        p= file[0].get_text()
+        text= ''
+        if bool(p.strip()):
+                text= pymupdf4llm.to_markdown(pdf)
+        else:
+                for page in file:
+                        tp= page.get_textpage_ocr()
+                        text += f" {tp.extractTEXT()} \n\n" 
+        file.close()
+        return text
+
+
 def extract_text_from_docx_xlsx(docx):
-    return pymupdf4llm.to_markdown(docx)
-@st.cache_data
+        text= pymupdf4llm.to_markdown(docx)
+        return text
+    
 def extract_text_from_file(file):
     _, ext = os.path.splitext(file)
-    ext = ext.strip('.')
+    ext= ext.strip('.')
     assert ext in FILE_TYPES, f'wrong file type. The file must be one of the following {FILE_TYPES}'
+        # print(ext)
     if ext in ['docx', 'xlsx']:
-        return extract_text_from_docx_xlsx(file)
+            return extract_text_from_docx_xlsx(file)
     if ext == 'pdf':
-        return extract_text_from_pdf(file)
+            return extract_text_from_pdf(file)
     return extract_text_from_img(file)
-
-pdf_chain = pdf_prompt | llm2
+                        
 
 def parse_file(filepath, parser=pdf_chain):
     text = extract_text_from_file(filepath)
-    result = parser.invoke(text)
+    result=parser.invoke(text)
     return result.content
 
 document_content_description = "Informations sur le produit, incluant la référence et la description."
 metadata_field_info = [
-    {'name': "Marque", 'description': "La Marque du produit.", 'type': "string"},
-    {'name': "Categorie", 'description': "La Categorie du produit.", 'type': "string"},
-]
+        {
+            'name': "Marque",
+            'description': "La Marque du produit.",
+            'type': "string",
+        },
+        {
+            'name': "Categorie",
+            'description': "La Categorie du produit.",
+            'type': "string",
+        }
+    ]
+# Initialiser le vectorstore et le retriever
 
-embedding_function = load_embedding_function()
-vectorstore = initialize_vectorstore(embedding_function, url, api_key, collection_name)
-retriever = initialize_retriever(llm, vectorstore, metadata_field_info, document_content_description)
-
+vectorstore = initialize_vectorstore(embeddings,url,api_key,collection_name)
+retriever = initialize_retriever(llm, vectorstore,metadata_field_info,document_content_description)
+# Construire le template de prompt
 prompt = ChatPromptTemplate.from_messages(
         [
             (
                 'system',
                 """
                 Tu es un assistant vendeur. Tu as accès au contexte seulement. Ne génère pas des informations si elles ne sont pas dans le contexte. 
-                affiche les produit un par un, pour chaque produit affiche son nom puis juste en dessous un tableau qui contient ces colonne Référence,Categorie, Marque, Description.        
+                Répond seulement si tu as la réponse. affiche les produit un par un, pour chaque produit affiche son nom puis juste en dessous tableau qui contient ces colonne Référence,Categorie, Marque, Description.        
                 Il faut savoir que laptop, ordinateur, ordinateurs portable , pc et poste de travail ont tous le même sens.
                 Il faut savoir que téléphone portable et smartphone ont le même sens.
                 Il faut savoir que tout autre caractéristique du produit tel que la RAM stockage font partie de la description du produit et il faut filtrer selon la marque et la catégorie seulement.
@@ -143,7 +127,7 @@ prompt = ChatPromptTemplate.from_messages(
                 lorsque une question de similarite entre des produits est poser, il faut dabord commencer par les produit qui ont des processeur qui se ressemble le plus, puis la memoire ram , puis le stockage, puis les autres caracteristique
                 la question peut contenir  plusieurs produits avec differentes descriptions, il faut chercher sur les differents produits demandé .
                 si je te pose une question sur les question ou les reponses fournient precedement tu doit me repondre selon l'historique.
-                tu ne doit pas oublier l'historique de la session car parfois le user continue a te poser des question sur tes reponses que tas deja fourni auparavant
+                tu ne doit pas oublier l'historique car parfois le user continue a te poser des question sur tes reponses que tas deja fourni aupatavant
 
                 Contexte: {context}
                 historique :{historique}
@@ -154,62 +138,7 @@ prompt = ChatPromptTemplate.from_messages(
             ),
         ]
     )
-
-from json import dumps, loads
-from langchain.schema import Document
-from typing import List
-
-
-def get_unique_union(documents: List[List[Document]]) -> List[Document]:
-    """Unique union of retrieved documents based on their metadata and content."""
-    try:
-        # Aplatir la liste de listes de documents en une seule liste
-        flattened_docs = [(dumps(doc.metadata), doc.page_content) for sublist in documents for doc in sublist]
-        # Utiliser un set pour obtenir des documents uniques basés sur les métadonnées et le contenu
-        unique_docs = list(set(flattened_docs))
-        # Reconstituer les documents uniques
-        return [Document(metadata=loads(metadata), page_content=content) for metadata, content in unique_docs]
-    except (TypeError, ValueError) as e:
-        print(f"Erreur lors de la conversion des documents : {e}")
-        return []
-         
-async def batch_query_bot(retriever,questions: list[str] | str,prompt):
-    if not isinstance(questions, list):
-            questions= [questions]
-    context = retriever.batch(questions)
-    if not context:
-        return "Je n'ai pas trouvé de produits correspondants."
-
-    print(context)
-    print('length de context : ', sum(len(sublist) for sublist in context))
-    liste=get_unique_union(context)
-    print('la liste : ', liste)
-    print(f"Nombre total de liste : ", {len(liste)})
-
-
-    #query_embedding = embedding_function.embed_query(question)
-    #doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
-    #similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
-
-    #filtered_docs = [
-    #    doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
-    #]
-    document_chain = create_stuff_documents_chain(llm, prompt)
-              
-    # Charger l'historique des conversations
-    conversation_history = memory.load_memory_variables({})
-    result = document_chain.invoke(
-            {
-                "context": liste,
-                "historique":conversation_history['history'],
-                "question": questions  # Utiliser 'question' au lieu de 'messages'
-            },
-    )
-    # Save context
-    memory.save_context({"question": questions}, {"response": result})
     
-
-    return result
 
 st.title("🧠 Sales Smart Assistant DGF")
 if 'messages' not in st.session_state:
@@ -239,12 +168,9 @@ with st.sidebar:
 extracted_text = st.session_state.extracted_text
 
 if query:
-    full_query= f"{query}\n{extracted_text}"
+    full_query= f"{query}{extracted_text}"
     st.session_state.messages.append({"role": "user", "content": full_query})
-
-    queries = extracted_text.strip('\n').split('\n')
-    print(queries)
-
+    queries = full_query.strip('\n').split('\n')
     # Run the batch query bot function
     start_time = time.time()
     result = asyncio.run(batch_query_bot(retriever, queries, prompt))

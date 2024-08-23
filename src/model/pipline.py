@@ -18,6 +18,7 @@ from langchain_core.output_parsers import StrOutputParser # parser
 from langchain_core.prompts import PromptTemplate
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
+from langchain.load import dumps, loads
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -51,7 +52,7 @@ def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_d
         document_content_description,
         metadata_field_info,
         verbose=True,
-        search_kwargs={'k': 50},
+        search_kwargs={'k': 200, 'fetch_k': 5},
         search_type='mmr'
     )
     return retriever
@@ -138,3 +139,40 @@ def extract_text_from_file(filepath):
 def parse_file(filepath, parser= pdf_chain):
         text= extract_text_from_file(filepath)
         return parser.invoke(text)
+
+#Unique union of retrieved docs
+def get_unique_union(documents: list[list]):
+    """ Unique union of retrieved docs """
+    flattened_docs = [dumps(doc) for sublist in documents for doc in sublist]
+    unique_docs = list(set(flattened_docs))
+    return [loads(doc) for doc in unique_docs]
+
+async def batch_query_bot(retriever,questions: list[str] | str,prompt):
+    if not isinstance(questions, list):
+            questions= [questions]
+    context = retriever.batch(questions)
+    if not context:
+        return "Je n'ai pas trouvé de produits correspondants."
+
+    print(context)
+    print('length de context : ', sum(len(sublist) for sublist in context))
+    liste=get_unique_union(context)
+    print('la liste : ', liste)
+    print(f"Nombre total de liste : ", {len(liste)})
+
+    document_chain = create_stuff_documents_chain(llm, prompt)
+              
+    # Charger l'historique des conversations
+    conversation_history = memory.load_memory_variables({})
+    result = document_chain.invoke(
+            {
+                "context": liste,
+                "historique":conversation_history['history'],
+                "question": questions  # Utiliser 'question' au lieu de 'messages'
+            },
+    )
+    # Save context
+    memory.save_context({"question": questions}, {"response": result})
+    
+
+    return result
