@@ -23,7 +23,7 @@ openAi8key=os.getenv('openAi8key')
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
 file_up_key= uuid.uuid4().hex
 
-GROQ_TOKEN = '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'
+GROQ_TOKEN = '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'
 @st.cache_resource
 def llm_generation(modelName, GROQ_TOKEN):         
     llm = ChatGroq(model_name=modelName, api_key=GROQ_TOKEN, temperature=0)
