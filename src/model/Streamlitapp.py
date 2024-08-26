@@ -1,5 +1,5 @@
 import streamlit as st
-from pipline import  initialize_vectorstore, initialize_retriever, query_bot
+from pipline import  initialize_vectorstore, initialize_retriever, query_bot, batch_query_bot
 from langchain_groq import ChatGroq
 import asyncio
 import time
@@ -25,7 +25,7 @@ file_up_key= uuid.uuid4().hex
 modelName = "gpt-4o-mini"
 llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)
 # Initialiser le modèle LLM
-GROQ_TOKEN = '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'
+GROQ_TOKEN = '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'
 @st.cache_resource
 def llm_generation(modelName, GROQ_TOKEN):         
     llm = ChatGroq(model_name=modelName, api_key=GROQ_TOKEN, temperature=0)
@@ -139,6 +139,10 @@ prompt = ChatPromptTemplate.from_messages(
     
 
 st.title("🧠 Sales Smart Assistant DGF")
+
+if "query" not in st.session_state:
+    st.session_state.query = " "
+
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
@@ -146,10 +150,60 @@ if "extracted_text" not in st.session_state:
     print('im in ext text')
     st.session_state.extracted_text =" "
 if "file_up_key" not in st.session_state:
+
     print('im in filu up key')
     st.session_state.file_up_key= uuid.uuid4().hex
-query= st.chat_input('comment puis-je vous aidez?')
+
+# CSS pour ajuster la taille des boutons
+st.markdown("""
+<style>
+.stButton button {
+    height: 60px;
+    width: 200px;
+    font-size: 20px;
+}
+.send-button {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+}
+.disabled-button {
+    background-color: #d3d3d3; /* Couleur de fond grise pour les boutons désactivés */
+    color: #a9a9a9; /* Couleur du texte grise pour les boutons désactivés */
+    cursor: not-allowed; /* Curseur pour indiquer que le bouton est désactivé */
+}
+.disabled-button:hover {
+    background-color: #d3d3d3; /* Couleur de fond grise pour le survol des boutons désactivés */
+}
+.message {
+    text-align: center;
+    font-size: 15px; /* Même taille de police que pour la zone de texte */
+    margin: 5px 0; /* Espacement autour du message */
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Organisation des boutons en colonnes
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    # Bouton désactivé
+    st.button("Disponibilité", disabled=True, help="Ce bouton est temporairement désactivé.", key="disabled_button_1")
+
+with col2:
+    # Bouton désactivé
+    st.button("Prix", disabled=True, help="Ce bouton est temporairement désactivé.", key="disabled_button_2")
+with col3:
+    if st.button("Produits Similaires"):
+        st.write("Recherchez des produits similaires.")
+        # Ajoutez la logique pour rechercher des produits similaires ici
+
+
 with st.sidebar:
+    
+    st.session_state.query = st.text_area('Collez votre texte ici :', value=st.session_state.query)
     uploaded_file =  st.file_uploader("Téléchargez un fichier contenant les produits que vous chercher", type=FILE_TYPES, key=st.session_state.file_up_key)
     if uploaded_file:
         filepath= uploaded_file.name
@@ -161,28 +215,27 @@ with st.sidebar:
         st.session_state.extracted_text = parse_file(filepath)
         #os.remove(filepath)
         st.session_state.file_up_key= uuid.uuid4().hex
-        st.markdown(st.session_state.extracted_text)
+        st.markdown(st.session_state.extracted_text.strip('\n').split('\n'))
+    
+    if st.button('Rechercher '):
+        full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
+        # Append the user's input to the chat history
+        st.session_state.messages.append({"role": "user", "content": full_query})
+        queries = full_query.strip('\n').split('\n')
+        # Delete the temporary file
+    
+        start_time =time.time()
+        # Get the bot's response
+        result= asyncio.run(batch_query_bot(retriever, queries,prompt))
+        #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
+        exec_time=time.time() - start_time
+        # Append the bot's response to the chat history
+        st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+        st.session_state.extracted_text= ""
+        st.session_state.query = "" 
 
-extracted_text= st.session_state.extracted_text
-
-if query:
-    full_query= f"{query}\n{extracted_text}"
-    # Append the user's input to the chat history
-    st.session_state.messages.append({"role": "user", "content": full_query})
-
-    # Delete the temporary file
-   
-    start_time =time.time()
-    # Get the bot's response
-    result= asyncio.run(query_bot(retriever, full_query,prompt))
-    #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
-    exec_time=time.time() - start_time
-    # Append the bot's response to the chat history
-    st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
-    st.session_state.extracted_text= ""
-
-    # Display the conversation
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+# Display the conversation
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 

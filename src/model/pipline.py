@@ -29,7 +29,7 @@ HF_TOKEN = os.getenv('API_TOKEN')
 openAi8key=os.getenv('openAi8key')
 CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
 COLLECTION_CSV = os.getenv('COLLECTION_CSV')
-GROQ_TOKEN = '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'
+GROQ_TOKEN = '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'
 #llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
 modelName = "gpt-4o-mini"
 llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0.5)
@@ -38,7 +38,7 @@ modelName2='gemma2-9b-it'
 #llama3-8b-8192
 # Initialize memory and conversation chain globally
 #memory = ConversationBufferMemory()
-memory = ConversationBufferWindowMemory( k=3)
+memory = ConversationBufferWindowMemory( k=0)
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
 def initialize_vectorstore(embeddings, QDRANT_URL, QDRANT_API_KEY, collection_name):
     qdrantClient = qdrant_client.QdrantClient(
@@ -55,7 +55,7 @@ def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_d
         document_content_description,
         metadata_field_info,
         verbose=True,
-        memory=ConversationBufferWindowMemory(k=3),
+        memory=ConversationBufferWindowMemory(k=0),
         search_kwargs={'k': 200, 'fetch_k': 5},
         search_type='mmr'
     )
@@ -90,60 +90,6 @@ async def query_bot(retriever,question,prompt):
 
     return result
 
-
-# Define the prompt template and chain
-pdf_prompt_instruct= """Tu es Un assistant AI super helpful. Étant donné un contexte qui est le texte brut issu d'une image ou d'un PDF, ton travail est simple :
-1- Extraire toutes les descriptions des produits qui se trouvent à l'intérieur du contexte.
-2- Reformuler, si besoin, les descriptions en étant le plus fidèle possible à la description originale.
-3- NE JAMAIS GÉNÉRER de réponse de ta part si le contexte est vide ou s'il n'y a pas assez d'informations.
-4- Pour chaque produit identifie et structure les informations suivantes si et seulement si elles existent :
-        - **Part Number** : [la référence du produit]
-        - **Marque** : [la marque du produit]
-        - **Catégorie** : [la catégorie du produit]
-        - **Description** : [la description du produit]
-5- NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION JUST DROP THE TEXT.
-
-{contexte}
-------------
-Réponse: trouve les produits qui correspondent à ces descriptions :
-"""
-
-def llm_generation(modelName, GROQ_TOKEN):         
-    llm = ChatGroq(model_name=modelName, api_key=GROQ_TOKEN, temperature=0)
-    return llm
-llm2= llm_generation(modelName2,GROQ_TOKEN)
-pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
-pdf_chain=  pdf_prompt | llm2
-def extract_text_from_img(img):
-        text= ocr.image_to_string(img)
-        return text
-
-def extract_text_from_pdf(pdf):
-        file= pymupdf.open(pdf)
-        p= file[0].get_text()
-        text= ''
-        if bool(p.strip()):
-                text= pymupdf4llm.to_markdown(pdf)
-                file.close()
-        else:
-                for page in file:
-                        tp= file.get_textpage_ocr()
-                        text += f" {tp.extractTEXT()} \n\n" 
-        return text
-                        
-
-def extract_text_from_file(filepath):
-        _, ext= os.path.splitext(filepath)
-        assert ext in FILE_TYPES, f'wrong file type. the file must be on of following {FILE_TYPES}'
-        if ext == '.pdf':
-                return extract_text_from_pdf(filepath)
-        else:
-                return extract_text_from_img(filepath)
-        
-def parse_file(filepath, parser= pdf_chain):
-        text= extract_text_from_file(filepath)
-        return parser.invoke(text)
-
 #Unique union of retrieved docs
 def get_unique_union(documents: list[list]):
     """ Unique union of retrieved docs """
@@ -158,10 +104,10 @@ async def batch_query_bot(retriever,questions: list[str] | str,prompt):
     if not context:
         return "Je n'ai pas trouvé de produits correspondants."
 
-    print(context)
+    #print(context)
     print('length de context : ', sum(len(sublist) for sublist in context))
     liste=get_unique_union(context)
-    print('la liste : ', liste)
+    #print('la liste : ', liste)
     print(f"Nombre total de liste : ", {len(liste)})
 
     document_chain = create_stuff_documents_chain(llm, prompt)
