@@ -217,22 +217,24 @@ with st.sidebar:
         st.session_state.file_up_key= uuid.uuid4().hex
         st.markdown(st.session_state.extracted_text.strip('\n').split('\n'))
     
-    if st.button('Rechercher '):
-        full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
-        # Append the user's input to the chat history
-        st.session_state.messages.append({"role": "user", "content": full_query})
-        queries = full_query.strip('\n').split('\n')
-        # Delete the temporary file
-    
-        start_time =time.time()
-        # Get the bot's response
-        result= asyncio.run(batch_query_bot(retriever, queries,prompt))
-        #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
-        exec_time=time.time() - start_time
-        # Append the bot's response to the chat history
-        st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
-        st.session_state.extracted_text= ""
-        st.session_state.query = "" 
+    # Ajouter un conteneur pour le bouton
+    with st.container():
+        if st.button('Rechercher '):
+            full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
+            # Append the user's input to the chat history
+            st.session_state.messages.append({"role": "user", "content": full_query})
+            queries = full_query.strip('\n').split('\n')
+            # Delete the temporary file
+        
+            start_time =time.time()
+            # Get the bot's response
+            result= asyncio.run(batch_query_bot(retriever, queries,prompt))
+            #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
+            exec_time=time.time() - start_time
+            # Append the bot's response to the chat history
+            st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+            st.session_state.extracted_text= ""
+            st.session_state.query = "" 
 
 # Display the conversation
 for message in st.session_state.messages:
