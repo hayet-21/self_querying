@@ -9,7 +9,9 @@ import pymupdf, pymupdf4llm
 import pytesseract 
 from langchain_core.prompts import PromptTemplate
 import os
-import uuid
+import uuid, base64
+from PIL import Image
+from io import BytesIO
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
@@ -35,10 +37,12 @@ def llm_generation(modelName, GROQ_TOKEN):
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io"
 api_key= "lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA"
 collection_name="OpenAI_SELFQ_collection"
-FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','PNG']
+FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','msg']
 modelName2='gemma2-9b-it'
 modelName = "gpt-4o-mini"
-llm2= llm_generation(modelName2,GROQ_TOKEN)
+#llm2= llm_generation(modelName2,GROQ_TOKEN)
+llm2 = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)
+
 pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
     1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. \
     2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
@@ -50,10 +54,32 @@ pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un
 {contexte}
 ------------
 Réponse :"""
+# image prompt
+image_system_prompt= """ Etant donné l'image ci-dessous, TU fais :
+1. **IDENTIFIES** toutes les descriptions completes des produits dans l'image.
+2. **Ne GENERE aucune** réponse si l'image n'est pas claire. Retourne "image pas claire" dans ce cas.
+3. **Format** : un produit décrit par ligne et une ligne suffit pour un produit, numérotée.
+4. **CONTENU**: doit contenir que la description technique pas d'info supplementaire
+4. **SANS COMMENTAIRES**
+"""
+image_user_prompt=  [
+                        {
+                            "type": "image_url",
+                            "image_url":   {"url": "data:image/{img_format};base64,{image_data}",
+                                            "detail": "low"}
+                        }
+                    ]
+
+image_prompt= ChatPromptTemplate.from_messages(
+    messages= [
+        ('system', image_system_prompt),
+        ('user', image_user_prompt)
+    ]
+)
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
 pdf_chain=  pdf_prompt | llm2
-
+image_chain= image_prompt | llm | StrOutputParser()
 def extract_text_from_img(img):
     text = pytesseract.image_to_string(img)
     return text
@@ -85,14 +111,43 @@ def extract_text_from_file(file):
             return extract_text_from_docx_xlsx(file)
     if ext == 'pdf':
             return extract_text_from_pdf(file)
-    return extract_text_from_img(file)
-                        
+    return parse_image(file)
 
-def parse_file(filepath, parser=pdf_chain):
-    text = extract_text_from_file(filepath)
-    result=parser.invoke(text)
-    return result.content
+def encode_image(image_path: str, size: tuple[int, int]= (320, 320)):
+    _, ext= os.path.splitext(image_path)
+    ext= ext.strip('.').lower()
+    
+    with open(image_path, 'rb') as f:
+        img_f= Image.open(BytesIO(f.read())).resize(size, Image.Resampling.BILINEAR)
+    
+    buffered= BytesIO()
+    if ext in ['jpeg', 'jpg']:
+        img_format= 'JPEG'
+    else:
+        img_format= 'PNG'
+    img_f.save(buffered, format= img_format)
+    return base64.b64encode(buffered.getvalue()).decode(), img_format
 
+def parse_image(image_path: str, chain, size: tuple[320, 320]):
+    _, ext= os.path.splitext(image_path)
+    ext= ext.strip('.').lower()
+    subtypes= ['png', 'jpg', 'jpeg', 'webp']
+    assert ext in subtypes, f'wrong file type. the file must be on of following {subtypes}'
+    b64_img, img_format= encode_image(image_path, size)
+    
+    return chain.invoke({'image_data': b64_img, 'img_format': img_format})
+              
+
+def parse_file(filepath, parser1=pdf_chain, parser2=image_chain, size=(320, 320)):
+    _, ext= os.path.splitext(filepath)
+    ext= ext.strip('.').lower()
+    assert ext in FILE_TYPES, f'wrong file type. the file must be on of following {FILE_TYPES}'
+    
+    if ext in ['pdf', 'docx', 'xlsx','msg']:
+        text = extract_text_from_file(filepath)
+        return parser1.invoke(text)
+    else:
+        return parse_image(filepath, parser2, size)
 document_content_description = "Informations sur le produit, incluant la référence et la description."
 metadata_field_info = [
         {
@@ -184,7 +239,48 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+with st.sidebar:
+    
+    st.session_state.query = st.text_area(label='recherche manuelle', placeholder='veuillez introduire votre requete ?', height=150)
+    uploaded_file =  st.file_uploader("Téléchargez un fichier contenant les produits que vous chercher", type=FILE_TYPES, key=st.session_state.file_up_key)
+    if uploaded_file:
+        filepath= uploaded_file.name
+        data= uploaded_file.read()
+        uploaded_file.close()
+        uploaded_file= None
+        with open(filepath, 'wb') as up_file:
+            up_file.write(data)
+        st.session_state.extracted_text = parse_file(filepath)
+        os.remove(filepath)
+        st.session_state.file_up_key= uuid.uuid4().hex
+        st.markdown(st.session_state.extracted_text.strip('\n').split('\n'))
+    
+    # Ajouter un conteneur pour le bouton
+    with st.container():
+        if st.button('Rechercher '):
+            full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
+            if not full_query.strip() :
+                st.warning("La requête est vide. Veuillez entrer une requête valide.")
+            else :
+                # Append the user's input to the chat history
+                st.session_state.messages.append({"role": "user", "content": full_query})
+                queries = full_query.strip('\n').split('\n')
+                # Delete the temporary file
+            
+                start_time =time.time()
+                # Get the bot's response
+                result= asyncio.run(batch_query_bot(retriever, queries,prompt))
+                #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
+                exec_time=time.time() - start_time
+                # Append the bot's response to the chat history
+                st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+                st.session_state.extracted_text= ""
+                st.session_state.query = "" 
 
+# Display the conversation
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 # Organisation des boutons en colonnes
 col1, col2, col3 = st.columns(3)
 
@@ -197,47 +293,26 @@ with col2:
     st.button("Prix", disabled=True, help="Ce bouton est temporairement désactivé.", key="disabled_button_2")
 with col3:
     if st.button("Produits Similaires"):
-        st.write("Recherchez des produits similaires.")
+        with st.container():
+            full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
+            if not full_query.strip() :
+                st.warning("La requête est vide. Veuillez entrer une requête valide.")
+            else :
+                # Append the user's input to the chat history
+                st.session_state.messages.append({"role": "user", "content": full_query})
+                queries = full_query.strip('\n').split('\n')
+                # Delete the temporary file
+            
+                start_time =time.time()
+                # Get the bot's response
+                result= asyncio.run(batch_query_bot(retriever, queries,prompt))
+                #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
+                exec_time=time.time() - start_time
+                # Append the bot's response to the chat history
+                st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+                st.session_state.extracted_text= ""
+                st.session_state.query = "" 
+
         # Ajoutez la logique pour rechercher des produits similaires ici
 
-
-with st.sidebar:
-    
-    st.session_state.query = st.text_area('Collez votre texte ici :', value=st.session_state.query)
-    uploaded_file =  st.file_uploader("Téléchargez un fichier contenant les produits que vous chercher", type=FILE_TYPES, key=st.session_state.file_up_key)
-    if uploaded_file:
-        filepath= uploaded_file.name
-        data= uploaded_file.read()
-        uploaded_file.close()
-        uploaded_file= None
-        with open(filepath, 'wb') as up_file:
-            up_file.write(data)
-        st.session_state.extracted_text = parse_file(filepath)
-        #os.remove(filepath)
-        st.session_state.file_up_key= uuid.uuid4().hex
-        st.markdown(st.session_state.extracted_text.strip('\n').split('\n'))
-    
-    # Ajouter un conteneur pour le bouton
-    with st.container():
-        if st.button('Rechercher '):
-            full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
-            # Append the user's input to the chat history
-            st.session_state.messages.append({"role": "user", "content": full_query})
-            queries = full_query.strip('\n').split('\n')
-            # Delete the temporary file
-        
-            start_time =time.time()
-            # Get the bot's response
-            result= asyncio.run(batch_query_bot(retriever, queries,prompt))
-            #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
-            exec_time=time.time() - start_time
-            # Append the bot's response to the chat history
-            st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
-            st.session_state.extracted_text= ""
-            st.session_state.query = "" 
-
-# Display the conversation
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
 
