@@ -43,17 +43,19 @@ modelName = "gpt-4o-mini"
 #llm2= llm_generation(modelName2,GROQ_TOKEN)
 llm2 = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)
 
-pdf_prompt_instruct = """ " Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
-    1- Extraire touts les produit et leurs description des produits qui se trouvent à l'interieur du contexte. \
+pdf_prompt_instruct = """ Tu es Un assistant AI super helpful. Etant donnee un contexte, ton travail est simple. il consiste a: \
+    1- sous forme de text brute, Extraire touts les produit et la description des produits qui se trouvent à l'interieur du contexte. \
     2- Reformuler, si besoin, les descriptions en etant le plus fidele possible à la description originale. \
     3- NE JAMAIS GENERER de reponse de ta part si le contexte est vide ou y a pas assez d'info. \
-    4-met chaque produit dans une ligne 
+    4- met chaque produit et sa description dans une ligne numerote
     5-repond avec la meme langue du text dans le context\
     6-NE DONNE AUCUN COMMENTAIRE NI INTRODUCTION, JUSTE LES INFORMATIONS SUIVANTES.\
 
 {contexte}
 ------------
 Réponse :"""
+
+
 # image prompt
 image_system_prompt= """ Etant donné l'image ci-dessous, TU fais :
 1. **IDENTIFIES** toutes les descriptions completes des produits dans l'image.
@@ -78,8 +80,9 @@ image_prompt= ChatPromptTemplate.from_messages(
 )
 
 pdf_prompt = PromptTemplate.from_template(pdf_prompt_instruct)
-pdf_chain=  pdf_prompt | llm2
+pdf_chain=  pdf_prompt | llm2 | StrOutputParser()
 image_chain= image_prompt | llm | StrOutputParser()
+
 def extract_text_from_img(img):
     text = pytesseract.image_to_string(img)
     return text
@@ -148,6 +151,8 @@ def parse_file(filepath, parser1=pdf_chain, parser2=image_chain, size=(320, 320)
         return parser1.invoke(text)
     else:
         return parse_image(filepath, parser2, size)
+    
+
 document_content_description = "Informations sur le produit, incluant la référence et la description."
 metadata_field_info = [
         {
@@ -281,6 +286,8 @@ with st.sidebar:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
+
+
 # Organisation des boutons en colonnes
 col1, col2, col3 = st.columns(3)
 
