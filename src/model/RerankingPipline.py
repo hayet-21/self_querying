@@ -1,0 +1,133 @@
+from dotenv import load_dotenv
+import os
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_community.vectorstores import Chroma
+from langchain.retrievers.self_query.base import SelfQueryRetriever
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
+from langchain_groq import ChatGroq
+from langchain.memory import ConversationBufferMemory # Import de la mémoire
+from langchain.memory import ConversationBufferWindowMemory
+from langchain_community.vectorstores import Qdrant
+import qdrant_client
+import pymupdf4llm , pymupdf,pytesseract as ocr
+from langchain_core.output_parsers import StrOutputParser # parser
+from langchain_core.prompts import PromptTemplate
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
+from langchain.load import dumps, loads
+#reranking
+
+from langchain.retrievers.document_compressors import FlashrankRerank
+from langchain.retrievers import ContextualCompressionRetriever
+
+compressor = FlashrankRerank()
+
+# Charger les variables d'environnement
+load_dotenv()
+# Récupérer les clés API et chemins nécessaires
+HF_TOKEN = os.getenv('API_TOKEN')
+openAi8key=os.getenv('openAi8key')
+CHROMA_PATH = os.path.abspath(f"../{os.getenv('CHROMA_PATH')}")
+COLLECTION_CSV = os.getenv('COLLECTION_CSV')
+GROQ_TOKEN = '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'
+#llm = ChatGroq(model_name='llama-3.1-70b-versatile', api_key=GROQ_TOKEN, temperature=0)
+modelName = "gpt-4o-mini"
+llm = ChatOpenAI(model_name=modelName, api_key=openAi8key, temperature=0.5)
+FILE_TYPES= ['.png', '.jpeg', '.jpg', '.pdf']
+modelName2='gemma2-9b-it'
+#llama3-8b-8192
+
+# Initialize memory and conversation chain globally
+#memory = ConversationBufferMemory()
+memory = ConversationBufferWindowMemory( k=0)
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=openAi8key)
+
+def initialize_vectorstore(embeddings, QDRANT_URL, QDRANT_API_KEY, collection_name):
+    qdrantClient = qdrant_client.QdrantClient(
+        url=QDRANT_URL,
+        prefer_grpc=True,
+        api_key=QDRANT_API_KEY)
+    return Qdrant(qdrantClient, collection_name, embeddings) #, vector_name='vector_params'
+
+def initialize_retriever(llm, vectorstore,metadata_field_info,document_content_description):
+    retriever = SelfQueryRetriever.from_llm(
+        llm,
+        vectorstore,
+        document_content_description,
+        metadata_field_info,
+        verbose=True,
+        memory=ConversationBufferWindowMemory(k=0),
+        search_kwargs={'k': 300, 'fetch_k': 30},
+        search_type='mmr'
+    )
+    return retriever
+
+async def query_bot(retriever,question,prompt):
+    context = retriever.invoke(question)
+    if not context:
+        return "Je n'ai pas trouvé de produits correspondants."
+
+    #query_embedding = embedding_function.embed_query(question)
+    #doc_embeddings = [embedding_function.embed_query(doc.page_content) for doc in context]
+    #similarities = cosine_similarity([query_embedding], doc_embeddings)[0]
+
+    #filtered_docs = [
+    #    doc for doc, similarity in zip(context, similarities) if similarity >= 0.7
+    #]
+    document_chain = create_stuff_documents_chain(llm, prompt)
+              
+    # Charger l'historique des conversations
+    conversation_history = memory.load_memory_variables({})
+    result = document_chain.invoke(
+            {
+                "context": context,
+                "historique":conversation_history['history'],
+                "question": question  # Utiliser 'question' au lieu de 'messages'
+            },
+    )
+    # Save context
+    memory.save_context({"question": question}, {"response": result})
+    
+
+    return result
+
+#Unique union of retrieved docs
+def get_unique_union(documents: list[list]):
+    """ Unique union of retrieved docs """
+    flattened_docs = [dumps(doc) for sublist in documents for doc in sublist]
+    unique_docs = list(set(flattened_docs))
+    return [loads(doc) for doc in unique_docs]
+
+
+async def batch_query_bot(retriever,questions: list[str] | str,prompt):
+    re_rank_retriever = ContextualCompressionRetriever(
+    base_compressor=compressor, base_retriever=retriever
+)
+    context=[[]]
+    liste=[]
+    if not isinstance(questions, list):
+            questions= [questions]
+    context = re_rank_retriever.batch(questions)
+    if not context:
+        return "Je n'ai pas trouvé de produits correspondants."
+    print(context)
+    print('length de context : ', sum(len(sublist) for sublist in context))
+    flattened_docs = [item for sublist in context for item in sublist]
+    print('la flattened_docs : ', flattened_docs)
+    #print('la liste : ', liste)
+
+    document_chain = create_stuff_documents_chain(llm, prompt)
+              
+    # Charger l'historique des conversations
+    conversation_history = memory.load_memory_variables({})
+    result = document_chain.invoke(
+            {
+                "context": flattened_docs,
+                "historique":conversation_history['history'],
+                "question": questions  # Utiliser 'question' au lieu de 'messages'
+            },
+    )
+    # Save context
+    memory.save_context({"question": questions}, {"response": result})
+    print('conversation_history',memory.load_memory_variables({}))
+    return result
