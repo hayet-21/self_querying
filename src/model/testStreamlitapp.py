@@ -427,6 +427,6 @@ with st.sidebar:
 
 
 # Display the conversation
-for message in reversed(st.session_state.messages):
+for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
