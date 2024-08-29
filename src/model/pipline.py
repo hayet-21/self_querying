@@ -23,7 +23,6 @@ from langchain.load import dumps, loads
 from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_cohere import CohereRerank
 from langchain_community.llms import Cohere
-from langchain.retrievers.document_compressors import FlashrankRerank
 import tiktoken
 tokenizer = tiktoken.get_encoding("cl100k_base")
 compressor = FlashrankRerank(top_n=2)
