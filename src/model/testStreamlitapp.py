@@ -15,7 +15,6 @@ from io import BytesIO
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
-from flashrank import Ranker, RerankRequest
 from langchain.chains import LLMChain
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
