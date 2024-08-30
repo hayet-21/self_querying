@@ -22,9 +22,7 @@ from langchain_openai import ChatOpenAI
 from langchain.load import dumps, loads
 from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_cohere import CohereRerank
-from langchain.retrievers.document_compressors import FlashrankRerank
 
-compressor = FlashrankRerank(top_n=2)
 compressor_cohere =CohereRerank(model="rerank-multilingual-v3.0",cohere_api_key="3Kqve3WTMgv563shw0tfOOpLL2pUItly7DxBQQhv",top_n=10)
 # Charger les variables d'environnement
 load_dotenv()
