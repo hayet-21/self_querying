@@ -28,7 +28,7 @@ embeddings = OpenAIEmbeddings(model="text-embedding-3-large",openai_api_key=open
 file_up_key= uuid.uuid4().hex
 # Initialize the chat model
 modelName = "gpt-4o-mini"
-llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.3)
+llm = ChatOpenAI(model_name=modelName, api_key= openAi8key, temperature=0.5)
 # Initialiser le modèle LLM
 GROQ_TOKEN = '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'
 @st.cache_resource
@@ -88,21 +88,66 @@ prompt_template = """Tu es un Assistant de Reformulation spécialisé dans les r
     - voici quelque marque de laptops : Dell, HP, Lenovo, Acer, Asus, Microsoft, MSI, Razer, Samsung, Toshiba, Sony (Vaio), Alienware, Gigabyte, Huawei, LG, Xiaomi, Fujitsu, Chuwi, Clevo, Eurocom
    *Instructions*:
     1. Vérifie si la question inclut une marque. Si oui, reformule la question selon les instructions ci-dessous ; sinon, retourne la question telle qu'elle est.
-    2. Objectif : Reformuler chaque requête de manière complète, auto-suffisante, en excluant  la marque mentionnée s'il y en a une.
+    2. Objectif : Reformuler chaque requête de manière complète, auto-suffisante, en excluant  la marque mentionnée s'il y en a une. Fournis trois reformulations pour chaque question, en gardant les reformulations proches de l'originale.
         Exemple 1:
         - Question : "Laptop Lenovo i7 16GB RAM 512GB SSD 14" "
-        - Reformulation : "Laptop  i7 16GB RAM 512GB SSD 14" "
+        - Reformulations : 
+          1. "Laptop i7 16GB RAM 512GB SSD 14" 
+          2. "Laptop i7 16GB RAM avec 512GB SSD 14 pouces"
+          3. "Laptop i7 16GB RAM 512GB SSD 14 pouces"
         Exemple 2:
         - Question : " 21D60011FR lenovo ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
-        - Reformulation : "21D60011FR ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
+        - Reformulations : 
+          1. "21D60011FR ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
+          2. "21D60011FR ThinkPad P16 Gen 1 intel i7 16 GB 1 To"
+          3. "21D60011FR ThinkPad P16 Gen 1 intel i7 16 GB avec 1 To"
     3. Pas de Réponse : Ne réponds jamais à la question, reformule-la uniquement si nécessaire.
-    4. Met chaque question reformulee sur une ligne.
-    5. N'ajoute pas des saut de ligne entre les questions reformulées 
+    4. Met chaque question reformulée sur une ligne, en indiquant les reformulations numérotées.
+    5. N'ajoute pas des saut de ligne entre les questions reformulées.
+    Questions:
+    {questions}
+"""
+prompt_template_rech= """Tu es un Assistant de Reformulation spécialisé dans les requêtes produit :
+   *Base de connaissance *:
+    - Voici quelques marques de laptops : Dell, HP, Lenovo, Acer, Asus, Microsoft, MSI, Razer, Samsung, Toshiba, Sony (Vaio), Alienware, Gigabyte, Huawei, LG, Xiaomi, Fujitsu, Chuwi, Clevo, Eurocom
+   *Instructions*:
+    1. Reformule chaque question pour la rendre plus complète ou plus claire, sans enlever la marque mentionnée.
+    2. Objectif : Fournis trois reformulations pour chaque question. Chaque reformulation doit rester fidèle à l’original tout en offrant une légère variation dans la phrasing ou la structure.
+        Exemple 1:
+        - Question : "Laptop Lenovo i7 16GB RAM 512GB SSD 14"
+        - Reformulations : 
+          1. "Laptop Lenovo avec processeur i7, 16GB de RAM et stockage de 512GB SSD, écran de 14 pouces"
+          2. "Laptop Lenovo i7, 16GB RAM, 512GB SSD, taille de l'écran 14 pouces"
+          3. "Laptop Lenovo, i7, 16GB de RAM, SSD de 512GB, écran 14 pouces"
+
+        Exemple 2:
+        - Question : "21D60011FR lenovo ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
+        - Reformulations : 
+          1. "21D60011FR Lenovo ThinkPad P16 Gen 1 avec Intel i7, 16GB de RAM et disque dur de 1TB"
+          2. "21D60011FR ThinkPad P16 Gen 1 Lenovo, processeur Intel i7, 16GB RAM, stockage 1TB"
+          3. "21D60011FR Lenovo ThinkPad P16 Gen 1, Intel i7, 16GB de RAM, avec 1TB de stockage"
+
+        Exemple 3:
+        - Question : "HP Pavilion x360 Intel Core i5 8GB RAM 256GB SSD"
+        - Reformulations : 
+          1. "HP Pavilion x360 avec processeur Intel Core i5, 8GB RAM, et disque SSD de 256GB"
+          2. "HP Pavilion x360 Intel Core i5, 8GB de RAM et 256GB SSD"
+          3. "HP Pavilion x360, Core i5, 8GB RAM, 256GB SSD"
+
+        Exemple 4:
+        - Question : "MacBook Pro M1 16GB 512GB SSD"
+        - Reformulations : 
+          1. "MacBook Pro avec puce M1, 16GB de RAM et 512GB SSD"
+          2. "MacBook Pro M1, 16GB RAM, 512GB SSD"
+          3. "MacBook Pro M1 avec 16GB de RAM et 512GB de stockage SSD"
+    3. N'ajoute pas de sauts de ligne entre les reformulations.
+    4. Liste chaque reformulation sur une ligne distincte.
     Questions:
     {questions}
 """
 
-def reformulate_queries_with_llm(queries: list, llm) -> list:
+
+def reformulate_queries_with_llm(queries: list, llm ,prompt_template) -> list:
     # Join the queries into a single string with newline separation
     joined_queries = "\n".join([f"Question: {query}" for query in queries])
     
@@ -272,7 +317,8 @@ prompt_similarite = ChatPromptTemplate.from_messages(
                 7. Autres: Enfin, considérez les autres spécifications, comme la carte graphique intégrée (Intel Iris Xe Graphics), le système d'exploitation (Windows 11 Pro), ou la couleur (bleu). Donc: Laptops avec Intel Iris Xe Graphics, même s'ils n'ont pas de CPU i7, 16 Go RAM, ou 512 Go SSD.
                 )))
 
-                Contexte: {context}
+
+                Contexte: {{{context}}}
                 historique :{historique}
                 Question: {question}
 
@@ -390,7 +436,7 @@ with st.sidebar:
                     st.session_state.messages.append({"role": "user", "content":chat_query})
                     queries = full_query.strip('\n').split('\n')
                     print('queries',queries)
-                    reformulated_queries = reformulate_queries_with_llm(queries, llm)
+                    reformulated_queries = reformulate_queries_with_llm(queries, llm,prompt_template)
                     print(reformulated_queries)
                     # Delete the temporary file
                 
@@ -416,10 +462,11 @@ with st.sidebar:
                 st.session_state.messages.append({"role": "user", "content": full_query})
                 queries = full_query.strip('\n').split('\n')
                 # Delete the temporary file
-            
+                reformulated_queries = reformulate_queries_with_llm(queries, llm,prompt_template_rech)
+                print(reformulated_queries)
                 start_time =time.time()
                 # Get the bot's response
-                result= asyncio.run(batch_query_bot(retriever, queries,prompt))
+                result= asyncio.run(batch_query_bot(retriever,reformulated_queries,prompt))
                 #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
                 exec_time=time.time() - start_time
                 # Append the bot's response to the chat history
