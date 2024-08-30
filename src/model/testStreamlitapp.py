@@ -15,6 +15,7 @@ from io import BytesIO
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+from flashrank import Ranker, RerankRequest
 from langchain.chains import LLMChain
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -85,7 +86,7 @@ image_chain= image_prompt | llm | StrOutputParser()
 # Créer un template de prompt pour la reformulation
 prompt_template = """Tu es un Assistant de Reformulation spécialisé dans les requêtes produit :
    *Base de connaissance *:
-    - voici qlq marque de laptop que tu dois connaitre : Apple, Dell, HP, Lenovo, Acer, Asus, Microsoft, MSI, Razer, Samsung, Toshiba, Sony (Vaio), Alienware, Gigabyte, Huawei, LG, Xiaomi, Fujitsu, Chuwi, Clevo, Eurocom
+    - voici quelque marque de laptops : Dell, HP, Lenovo, Acer, Asus, Microsoft, MSI, Razer, Samsung, Toshiba, Sony (Vaio), Alienware, Gigabyte, Huawei, LG, Xiaomi, Fujitsu, Chuwi, Clevo, Eurocom
    *Instructions*:
     1. Vérifie si la question inclut une marque. Si oui, reformule la question selon les instructions ci-dessous ; sinon, retourne la question telle qu'elle est.
     2. Objectif : Reformuler chaque requête de manière complète, auto-suffisante, en excluant  la marque mentionnée s'il y en a une.
@@ -96,6 +97,8 @@ prompt_template = """Tu es un Assistant de Reformulation spécialisé dans les r
         - Question : " 21D60011FR lenovo ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
         - Reformulation : "21D60011FR ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
     3. Pas de Réponse : Ne réponds jamais à la question, reformule-la uniquement si nécessaire.
+    4. Met chaque question reformulee sur une ligne.
+    5. N'ajoute pas des saut de ligne entre les questions reformulées 
     Questions:
     {questions}
 """
@@ -232,7 +235,7 @@ prompt_similarite = ChatPromptTemplate.from_messages(
 
                 *Instructions*:
                 0. dites combien de produit dans le contexte
-                1. Utilisez le contexte fourni entre triple crochets pour répondre à la requête en listant tous les les produits. 
+                1. Utilisez le contexte fourni entre triple crochets pour répondre à la requête en listant tous les produits. 
                 2. Identifiez la catégorie appropriée en utilisant la liste des synonymes.
                 3. Classez les produits par ordre décroissant de similarité avec la description de référence donnée, en suivant l'ordre des priorités de 1 à 8, comme le montre l'example ci-dessous entre triple parenthèses.
                 4. Si plusieurs produits sont à égalité pour une priorité donnée, passez à la suivante pour affiner le classement.
@@ -243,7 +246,7 @@ prompt_similarite = ChatPromptTemplate.from_messages(
                     - Catégorie : Type de produit (ex. ordinateur, téléphone)
                     - Marque : Marque du produit
                     - Description : Description complète du produit
-                8. Si le contexte est vide ou que les instructions ne s'appliquent pas, répondez "pas d'équivalents".
+                8. Si le contexte est vide ou que qu'il ne contient pas les produits equivalents a la question : répondez "pas de produits équivalents".
                 *Pas de commentaire*
 
 
@@ -421,12 +424,33 @@ with st.sidebar:
                 #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
                 exec_time=time.time() - start_time
                 # Append the bot's response to the chat history
-                st.session_state.messages.append({"role": "ai", "content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+                st.session_state.messages.append({"role": "ai","content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
                 st.session_state.extracted_text= ""
                 st.session_state.query = "" 
 
 
-# Display the conversation
+#Affichage 
+# Create pairs of (question, response) and reverse the list
+message_pairs = []
+current_pair = []
+
 for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    if message["role"] == "user":
+        if current_pair:
+            message_pairs.append(current_pair)
+        current_pair = [message]
+    else:
+        if current_pair:
+            current_pair.append(message)
+            message_pairs.append(current_pair)
+            current_pair = []
+
+# Handle case if last pair is incomplete
+if current_pair:
+    message_pairs.append(current_pair)
+
+# Display the conversation in reverse chronological order
+for pair in reversed(message_pairs):
+    for message in pair:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
