@@ -16,7 +16,7 @@ from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from langchain.chains import LLMChain
-
+import extract_msg
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 load_dotenv()
@@ -184,7 +184,40 @@ def extract_text_from_pdf(pdf):
 def extract_text_from_docx_xlsx(docx):
         text= pymupdf4llm.to_markdown(docx)
         return text
+
+#import extract_msg
+def extract_text_and_attachments_from_msg(path, temp_dir):
+    msg = extract_msg.Message(path)
+    # Extraire le corps du message
+    msg_message = "le contenu de l'email est : \n\n " + msg.body
     
+    # Extraire les pièces jointes
+    if msg.attachments:
+        for attachment in msg.attachments:
+            attachment_name = attachment.longFilename or attachment.shortFilename
+            if not attachment_name:
+                continue
+            attachment_path = os.path.join(temp_dir, attachment_name)
+            with open(attachment_path, 'wb') as f:
+                f.write(attachment.data)
+            
+            _, ext = os.path.splitext(attachment_name)
+            ext = ext.strip('.')
+            assert ext in FILE_TYPES, f'wrong file type. The file must be one of the following {FILE_TYPES}'
+
+            if ext in ['docx', 'xlsx']:
+                attachment_text = extract_text_from_docx_xlsx(attachment_path)
+            elif ext == 'pdf':
+                attachment_text = extract_text_from_pdf(attachment_path)
+            elif ext in ['jpg', 'jpeg', 'png', 'PNG']:
+                attachment_text = extract_text_from_img(attachment_path)
+            else:
+                attachment_text = 'Format de pièce jointe non supporté.'
+
+            msg_message += f"\n\n{attachment_text}"
+    
+    msg.close()
+    return msg_message
 def extract_text_from_file(file):
     _, ext = os.path.splitext(file)
     ext= ext.strip('.')
@@ -194,6 +227,16 @@ def extract_text_from_file(file):
             return extract_text_from_docx_xlsx(file)
     if ext == 'pdf':
             return extract_text_from_pdf(file)
+    if ext == 'msg':
+        temp_dir = os.path.join('temp_attachments', uuid.uuid4().hex)
+        os.makedirs(temp_dir, exist_ok=True)
+        msg_text = extract_text_and_attachments_from_msg(file, temp_dir)
+        # Nettoyer les fichiers temporaires
+        for root, dirs, files in os.walk(temp_dir):
+            for name in files:
+                os.remove(os.path.join(root, name))
+        os.rmdir(temp_dir)
+        return msg_text
     return parse_image(file)
 
 def encode_image(image_path: str, size: tuple[int, int]= (320, 320)):
@@ -220,7 +263,6 @@ def parse_image(image_path: str, chain, size: tuple[320, 320]):
     
     return chain.invoke({'image_data': b64_img, 'img_format': img_format})
               
-
 def parse_file(filepath, parser1=pdf_chain, parser2=image_chain, size=(320, 320)):
     _, ext= os.path.splitext(filepath)
     ext= ext.strip('.').lower()
