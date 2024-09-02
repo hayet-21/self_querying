@@ -209,8 +209,6 @@ def extract_text_and_attachments_from_msg(path, temp_dir):
                 attachment_text = extract_text_from_docx_xlsx(attachment_path)
             elif ext == 'pdf':
                 attachment_text = extract_text_from_pdf(attachment_path)
-            elif ext in ['jpg', 'jpeg', 'png', 'PNG']:
-                attachment_text = extract_text_from_img(attachment_path)
             else:
                 attachment_text = 'Format de pièce jointe non supporté.'
 
