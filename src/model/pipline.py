@@ -23,7 +23,7 @@ from langchain.load import dumps, loads
 from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
 from langchain_cohere import CohereRerank
 
-compressor_cohere =CohereRerank(model="rerank-multilingual-v3.0",cohere_api_key="3Kqve3WTMgv563shw0tfOOpLL2pUItly7DxBQQhv",top_n=10)
+compressor_cohere =CohereRerank(model="rerank-multilingual-v3.0",cohere_api_key="weyxiNeVkznwJueXMTuj9Mu7JtwTDf5nMfgPA8XF",top_n=10)
 # Charger les variables d'environnement
 load_dotenv()
 # Récupérer les clés API et chemins nécessaires
