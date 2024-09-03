@@ -17,6 +17,8 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from langchain.chains import LLMChain
 import extract_msg
+from email.parser import BytesParser
+from email import policy
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 load_dotenv()
@@ -40,7 +42,7 @@ def llm_generation(modelName, GROQ_TOKEN):
 url="https://a08399e1-9b23-417d-bc6a-88caa066bca4.us-east4-0.gcp.cloud.qdrant.io"
 api_key= "lJo8SY8JQy7W0KftZqO3nw11gYCWIaJ0mmjcjQ9nFhzFiVamf3k6XA"
 collection_name="OpenAI_SELFQ_collection"
-FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','msg']
+FILE_TYPES= ['png', 'jpeg', 'jpg', 'pdf', 'docx', 'xlsx','msg','eml']
 modelName2='gemma2-9b-it'
 modelName = "gpt-4o-mini"
 #llm2= llm_generation(modelName2,GROQ_TOKEN)
@@ -121,31 +123,67 @@ prompt_template_rech= """Tu es un Assistant de Reformulation spécialisé dans l
           3. "Laptop Lenovo, i7, 16GB de RAM, SSD de 512GB, écran 14 pouces"
 
         Exemple 2:
-        - Question : "21D60011FR lenovo ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
-        - Reformulations : 
-          1. "21D60011FR Lenovo ThinkPad P16 Gen 1 avec Intel i7, 16GB de RAM et disque dur de 1TB"
-          2. "21D60011FR ThinkPad P16 Gen 1 Lenovo, processeur Intel i7, 16GB RAM, stockage 1TB"
-          3. "21D60011FR Lenovo ThinkPad P16 Gen 1, Intel i7, 16GB de RAM, avec 1TB de stockage"
+        -"21D60011FR lenovo ThinkPad P16 Gen 1 intel i7 16 GB 1 TB"
+        - "21D60011FR Lenovo ThinkPad P16 Gen 1 avec Intel i7, 16GB de RAM et disque dur de 1TB","21D60011FR ThinkPad P16 Gen 1 Lenovo, processeur Intel i7, 16GB RAM, stockage 1TB","21D60011FR Lenovo ThinkPad P16 Gen 1, Intel i7, 16GB de RAM, avec 1TB de stockage"
 
         Exemple 3:
-        - Question : "HP Pavilion x360 Intel Core i5 8GB RAM 256GB SSD"
-        - Reformulations : 
-          1. "HP Pavilion x360 avec processeur Intel Core i5, 8GB RAM, et disque SSD de 256GB"
-          2. "HP Pavilion x360 Intel Core i5, 8GB de RAM et 256GB SSD"
-          3. "HP Pavilion x360, Core i5, 8GB RAM, 256GB SSD"
+        - "HP Pavilion x360 Intel Core i5 8GB RAM 256GB SSD"
+        -"HP Pavilion x360 avec processeur Intel Core i5, 8GB RAM, et disque SSD de 256GB","HP Pavilion x360 Intel Core i5, 8GB de RAM et 256GB SSD","HP Pavilion x360, Core i5, 8GB RAM, 256GB SSD"
 
         Exemple 4:
-        - Question : "MacBook Pro M1 16GB 512GB SSD"
-        - Reformulations : 
-          1. "MacBook Pro avec puce M1, 16GB de RAM et 512GB SSD"
-          2. "MacBook Pro M1, 16GB RAM, 512GB SSD"
-          3. "MacBook Pro M1 avec 16GB de RAM et 512GB de stockage SSD"
-    3. N'ajoute pas de sauts de ligne entre les reformulations.
-    4. Liste chaque reformulation sur une ligne distincte.
+        - "MacBook Pro M1 16GB 512GB SSD"
+        -"MacBook Pro avec puce M1, 16GB de RAM et 512GB SSD","MacBook Pro M1, 16GB RAM, 512GB SSD","MacBook Pro M1 avec 16GB de RAM et 512GB de stockage SSD"
+    Ne réponds pas directement aux questions ; reformule uniquement en suivant les instructions ci-dessus.
+    Mets chaque question reformulée sur une seule ligne pour garantir une lisibilité optimale.
+    N'ajoute pas de saut de ligne entre les questions reformulées pour maintenir la cohérence.
     Questions:
     {questions}
 """
+prompt_template_metier = """Assistant Spécialisé en Reformulation de Requêtes metier 
+    *Base de connaissance* :
+    Marques de Laptops : Apple, Dell, HP, Lenovo, Acer, Asus, Microsoft, MSI, Razer, Samsung, Toshiba, Sony (Vaio), Alienware, Gigabyte, Huawei, LG, Xiaomi, Fujitsu, Chuwi, Clevo, Eurocom.
 
+    *Synonymes de catégories* :
+
+    Laptop : Laptop, Ordinateur Portable, PC, PC portable.
+    All in One : All-in-One, PC Tout-en-Un.
+    Poste de Travail : Poste de Travail, PC, Ordinateur, Desktop, unité centrale.
+    Station Mobile : Laptop gaming, laptop haute performance.
+    Station de Travail : Station de Travail, Workstation, desktop haute performance, desktop gaming, unité centrale gaming.
+    Écran : Écran, Moniteur, Monitor.
+    Téléphone : Téléphone, Smartphone.
+    Imprimante : Imprimante, Printer.
+    Instructions de Reformulation :
+
+    *Remplacement des synonymes* :
+
+    Distingue clairement entre les catégories de produits pour éviter toute confusion. Par exemple, "desktop" se réfère à un poste de travail standard, tandis que "desktop haute performance" désigne une station de travail.
+    Remplace les synonymes de catégories par la catégorie principale correspondante lors de la reformulation. Par exemple, remplace "PC portable" par "Laptop". Applique cette règle à toutes les catégories listées ci-dessus.
+
+    *Reformulation basée sur un métier spécifique* :
+
+    Si la question concerne plusieurs types de produits, reformule chaque produit séparément en décrivant ses caractéristiques essentielles. Utilise des phrases concises et informatives.
+    Conserve les catégories, marques ou modèles spécifiques mentionnés dans la question.
+    Exemple : "Pouvez-vous nous recommander des laptops pour nos développeurs de logiciels, des stations mobiles pour nos graphistes, et des moniteurs pour les postes de travail de notre équipe technique ?"
+    Reformulation :
+
+    "Laptop avec processeur i7, 16GB de RAM, 1TB SSD et carte graphique dédiée."
+    "Station mobile équipée d'un processeur i7, 32GB de RAM, 1TB SSD et carte graphique dédiée avec un écran 4K."
+    "Moniteur de 27 pouces, résolution 1440p et temps de réponse rapide."
+    *Conseils supplémentaires* :
+
+    Assure-toi que chaque reformulation soit clairement séparée et autonome.
+    Présente chaque reformulation sur une ligne distincte pour une clarté maximale.
+    *Instructions supplémentaires* :
+
+    Ne réponds pas directement aux questions ; reformule uniquement selon les instructions ci-dessus.
+    Mets chaque reformulation sur une ligne séparée.
+    Assure-toi que chaque description de produit est claire et distincte.
+    Questions : {questions}
+
+
+
+"""
 
 def reformulate_queries_with_llm(queries: list, llm ,prompt_template) -> list:
     # Join the queries into a single string with newline separation
@@ -191,31 +229,26 @@ def extract_text_and_attachments_from_msg(path, temp_dir):
     # Extraire le corps du message
     msg_message = "le contenu de l'email est : \n\n " + msg.body
     
-    # Extraire les pièces jointes
-    if msg.attachments:
-        for attachment in msg.attachments:
-            attachment_name = attachment.longFilename or attachment.shortFilename
-            if not attachment_name:
-                continue
-            attachment_path = os.path.join(temp_dir, attachment_name)
-            with open(attachment_path, 'wb') as f:
-                f.write(attachment.data)
-            
-            _, ext = os.path.splitext(attachment_name)
-            ext = ext.strip('.')
-            assert ext in FILE_TYPES, f'wrong file type. The file must be one of the following {FILE_TYPES}'
-
-            if ext in ['docx', 'xlsx']:
-                attachment_text = extract_text_from_docx_xlsx(attachment_path)
-            elif ext == 'pdf':
-                attachment_text = extract_text_from_pdf(attachment_path)
-            else:
-                attachment_text = 'Format de pièce jointe non supporté.'
-
-            msg_message += f"\n\n{attachment_text}"
-    
     msg.close()
     return msg_message
+def extract_eml_file(file_path,):
+    with open(file_path, 'rb') as f:
+        msg = BytesParser(policy=policy.default).parse(f)
+
+    # Extract body
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            disposition = part.get("Content-Disposition")
+
+            # Extract the plain text part
+            if content_type == "text/plain" and disposition is None:
+                extracted_text = part.get_payload(decode=True).decode(part.get_content_charset())
+    else:
+        # For non-multipart emails
+        extracted_text = msg.get_payload(decode=True).decode(msg.get_content_charset())
+
+    return extracted_text
 def extract_text_from_file(file):
     _, ext = os.path.splitext(file)
     ext= ext.strip('.')
@@ -235,6 +268,8 @@ def extract_text_from_file(file):
                 os.remove(os.path.join(root, name))
         os.rmdir(temp_dir)
         return msg_text
+    if ext =='eml':
+        return extract_eml_file(file)
     return parse_image(file)
 
 def encode_image(image_path: str, size: tuple[int, int]= (320, 320)):
@@ -266,7 +301,7 @@ def parse_file(filepath, parser1=pdf_chain, parser2=image_chain, size=(320, 320)
     ext= ext.strip('.').lower()
     assert ext in FILE_TYPES, f'wrong file type. the file must be on of following {FILE_TYPES}'
     
-    if ext in ['pdf', 'docx', 'xlsx','msg']:
+    if ext in ['pdf', 'docx', 'xlsx','msg','eml']:
         text = extract_text_from_file(filepath)
         return parser1.invoke(text)
     else:
@@ -464,6 +499,31 @@ with st.sidebar:
     with col2:
         # Bouton désactivé
         st.button("Prix", disabled=True, help="Ce bouton est temporairement désactivé.", key="disabled_button_2")
+        if st.button("proposition selon un metier"):
+            full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
+            if not full_query.strip() :
+                st.warning("La requête est vide. Veuillez entrer une requête valide.")
+            else :
+                # Append the user's input to the chat history
+                chat_query=f'propose des produits selon ce metier : {full_query}'
+                st.session_state.messages.append({"role": "user", "content":chat_query})
+                queries = full_query.strip('\n').split('\n')
+                print("requete user",queries)
+                # Delete the temporary file
+                reform_queries = reformulate_queries_with_llm(queries, llm,prompt_template_metier)
+                print("reform_queries metier =",reform_queries)
+                #reformulated_queries = reformulate_queries_with_llm(reform_queries, llm,prompt_template_rech)
+                #print('reform recherche =',reformulated_queries)
+                start_time =time.time()
+                # Get the bot's response
+                result= asyncio.run(batch_query_bot(retriever,reform_queries,prompt_similarite))
+                #print(f"Résultat: {result}, Temps d'exécution: {exec_time} secondes")
+                exec_time=time.time() - start_time
+                # Append the bot's response to the chat history
+                st.session_state.messages.append({"role": "ai","content" :f"{result}\n\n(Temps d'exécution: {exec_time:.2f} secondes)"})
+                st.session_state.extracted_text= ""
+                st.session_state.query = "" 
+
     with col3:
         if st.button("Produits Similaires"):
                 full_query= f"{st.session_state.query}{st.session_state.extracted_text}"
