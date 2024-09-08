@@ -1,5 +1,5 @@
 import streamlit as st
-from pipline import  initialize_vectorstore, initialize_retriever, query_bot, batch_query_bot
+from pipline_stream import  initialize_vectorstore, initialize_retriever, query_bot, batch_query_bot
 from langchain_groq import ChatGroq
 import asyncio
 import time
