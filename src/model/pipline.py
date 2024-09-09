@@ -94,6 +94,8 @@ def get_unique_union(documents: list[list]):
     flattened_docs = [dumps(doc) for sublist in documents for doc in sublist]
     unique_docs = list(set(flattened_docs))
     return [loads(doc) for doc in unique_docs]
+
+
 async def batch_query_bot(retriever,questions: list[str] | str,prompt):
     re_rank_retriever = ContextualCompressionRetriever(
     base_compressor=compressor_cohere, base_retriever=retriever
