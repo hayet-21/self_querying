@@ -1,4 +1,4 @@
-env/
+.env
 src/model/utils_query.py
 src/model/query.py
 src/model/self_querying.py
